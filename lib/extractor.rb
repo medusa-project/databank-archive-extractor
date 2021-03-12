@@ -44,7 +44,7 @@ class Extractor
       begin
         s3_client.put_object({
              body: retVal.to_json,
-             bucket: "databank-demo-main",
+             bucket: "databank-main",
              key: s3_path,
          })
         puts "Putting json response for object #{object_key} in S3 bucket #{bucket_name} with key #{s3_path}"
@@ -57,7 +57,7 @@ class Extractor
       sqs = Aws::SQS::Client.new(region: region)
 
       # Send a message to a queue.
-      queue_name = "extractor-to-databank-demo"
+      queue_name = "extractor-to-databank-prod"
       queue_url = sqs.get_queue_url(queue_name: queue_name).queue_url
 
       begin
