@@ -10,7 +10,7 @@ class Extractor
   def self.extract(bucket_name, object_key, binary_name, web_id)
     begin
       local_path = "./#{binary_name}"
-      s3_path = "#{web_id}_#{binary_name}"
+      s3_path = "messages/#{web_id}.json"
 
       region = 'us-east-2'
       s3_client = Aws::S3::Client.new(region: region)
@@ -52,7 +52,7 @@ class Extractor
         puts "Error putting json response for object #{object_key} in S3 bucket #{bucket_name}: #{e.message}"
       end
 
-      retVal = {"bucket name" => bucket_name, "object key" => s3_path}
+      retVal = {"bucketName" => bucket_name, "objectKey" => s3_path}
 
       sqs = Aws::SQS::Client.new(region: region)
 
