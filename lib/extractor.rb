@@ -9,8 +9,6 @@ require_relative 'extractor/extraction_status.rb'
 class Extractor
   def self.extract(bucket_name, object_key, binary_name, web_id)
     begin
-      local_path = "./#{binary_name}"
-      s3_path = "messages/#{web_id}.json"
 
       region = 'us-east-2'
       s3_client = Aws::S3::Client.new(region: region)
@@ -41,6 +39,7 @@ class Extractor
       retVal = {"web_id" => web_id, "status" => extraction.status, "error" => extraction.error, "peek_type" => extraction.peek_type, "peek_text" => extraction.peek_text, "nested_items" => items}
 
 
+      s3_path = "messages/#{web_id}.json"
       begin
         s3_client.put_object({
              body: retVal.to_json,
@@ -52,7 +51,7 @@ class Extractor
         puts "Error putting json response for object #{object_key} in S3 bucket #{bucket_name}: #{e.message}"
       end
 
-      retVal = {"bucketName" => bucket_name, "objectKey" => s3_path}
+      retVal = {"bucket_name" => bucket_name, "object_key" => s3_path}
 
       sqs = Aws::SQS::Client.new(region: region)
 
