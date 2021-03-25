@@ -52,7 +52,7 @@ class Extractor
         puts "Error putting json response for object #{object_key} in S3 bucket #{bucket_name}: #{e.message}"
       end
 
-      retVal = {"bucketName" => bucket_name, "objectKey" => s3_path}
+      retVal = {"bucket_name" => bucket_name, "object_key" => s3_path}
 
       sqs = Aws::SQS::Client.new(region: region)
 

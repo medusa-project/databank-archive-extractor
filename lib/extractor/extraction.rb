@@ -8,7 +8,6 @@ require 'zlib'
 require 'libarchive'
 require 'rubygems/package'
 
-require_relative 'nested_item.rb'
 require_relative 'extraction_status.rb'
 require_relative 'peek_type.rb'
 
@@ -38,7 +37,6 @@ class Extraction
       self.status = ExtractionStatus::ERROR
       self.peek_type = PeekType::NONE
       report_problem(error.message)
-        #raise error
     ensure
       if self.peek_text && self.peek_text.encoding.name != 'UTF-8'
         begin
@@ -55,14 +53,12 @@ class Extraction
   end
 
   def report_problem(report)
-    #Problem.create(task_id: self.id, report: report)
     self.error = {"task_id" => self.id, "report" => report}
   end
 
   def extract_features
     mime_guess = top_level_mime || Extraction.mime_from_filename(self.binary_name) || 'application/octet-stream'
 
-    #Rails.logger.warn("#{self.binary_name} - #{mime_guess}")
 
     mime_parts = mime_guess.split("/")
 
@@ -87,9 +83,8 @@ class Extraction
   end
 
   def self.mime_from_path(path)
-#    puts "path provided #{path}"
+
     file_mime_response = MimeMagic.by_path(File.open("#{path}")).to_s
-#    puts "file mime response #{file_mime_response}"
     if file_mime_response.length > 0
       file_mime_response
     else
@@ -167,9 +162,6 @@ class Extraction
                 File.delete(extracted_entry_path) if File.exist?(extracted_entry_path)
               end
 
-            else
-              #Rails.logger.warn("skipped entry is ds_store: #{is_ds_store(entry_path)}")
-              #Rails.logger.warn("skipped entry is mac thing: #{is_mac_thing(entry_path)}")
 
             end
           end
@@ -190,7 +182,7 @@ class Extraction
       self.status = ExtractionStatus::ERROR
       self.peek_type = PeekType::NONE
       report_problem("problem extracting zip listing for task: #{ex.message}")
-      #return false
+
       raise ex
     end
   end
@@ -204,7 +196,7 @@ class Extraction
         while entry = ar.next_header
 
           entry_path = valid_entry_path(entry.pathname)
-#          puts "archive name #{entry.pathname}"
+
           if entry_path
 
             if !is_ds_store(entry_path) && !is_mac_thing(entry_path)
@@ -371,7 +363,7 @@ class Extraction
   end
 
   def valid_entry_path(entry_path)
-    if entry_path[-1] == '/'
+    if ends_in_slash(entry_path)
       return entry_path[0...-1]
     elsif entry_path.length > 0
       return entry_path
@@ -409,25 +401,6 @@ class Extraction
       else
         valid_path
       end
-    end
-  end
-
-  def self.charset_from_path(path)
-
-    file_info = ""
-
-    if OS.mac?
-      file_info = `file -I #{path}`
-    elsif OS.linux?
-      file_info = `file -i #{path}`
-    else
-      return nil
-    end
-
-    if file_info.length > 0
-      file_info.strip.split('charset=').last
-    else
-      nil
     end
   end
 
