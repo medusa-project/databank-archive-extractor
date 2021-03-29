@@ -10,14 +10,13 @@ gem 'mime-types', require: 'mime/types/full'
 gem 'rubyzip'
 
 # Use archive for non-zip archive files
-#gem 'archive'
 gem 'libarchive'
 
 # Use os to interact with operating system
 gem 'os'
 
 # Use mimemagic to find the mime type of a file from the extension or content
-gem 'mimemagic'
+gem "mimemagic", "~> 0.3.6"
 
 gem "rake", "~> 13.0"
 
