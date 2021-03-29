@@ -416,7 +416,7 @@ class Extraction
         name_arr = entry_path.split("/")
 
         name_arr.length.times do
-          return_string << '<div class="indent"">'
+          return_string << '<div class="indent">'
         end
 
         if entry_path[-1] == "/" # means directory
@@ -434,7 +434,7 @@ class Extraction
 
     end
 
-    return return_string
+    return return_string.gsub("\"", "'")
 
   end
 
