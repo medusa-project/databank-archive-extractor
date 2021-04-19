@@ -10,7 +10,7 @@ gem 'mime-types', require: 'mime/types/full'
 gem 'rubyzip'
 
 # Use archive for non-zip archive files
-#gem 'libarchive'
+gem 'libarchive'
 
 # Use os to interact with operating system
 gem 'os'

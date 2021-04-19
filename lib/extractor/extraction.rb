@@ -46,7 +46,7 @@ class Extraction
           self.peek_type = PeekType::NONE
           report_problem('invalid encoding for peek text')
         rescue Exception => ex
-          report_problem("invalid encoding and problem characer: #{ex.class}, #{ex.message}")
+          report_problem("invalid encoding and problem character: #{ex.class}, #{ex.message}")
         end
       end
     end
