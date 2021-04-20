@@ -9,7 +9,10 @@ require_relative 'extractor/extraction_status.rb'
 class Extractor
   def self.extract(bucket_name, object_key, binary_name, web_id)
     begin
-
+      status = ExtractionStatus::ERROR
+      error = Hash.new
+      s3_put_status = ExtractionStatus::SUCCESS
+      s3_put_error = ""
       region = 'us-east-2'
       s3_client = Aws::S3::Client.new(region: region)
       del_path = "./mnt/efs/#{bucket_name}_#{web_id}"
@@ -26,18 +29,20 @@ class Extractor
             bucket: bucket_name,
             key: object_key,
         )
-        puts "Getting object #{object_key} from #{bucket_name}"
+        puts "Getting object #{object_key} with ID #{web_id} from #{bucket_name}"
       rescue StandardError => e
-        puts "Error getting object #{object_key} from S3 bucket #{bucket_name}: #{e.message}"
+        error = {"task_id" => web_id, "s3_get_report" => "Error getting object #{object_key} with ID #{web_id} from S3 bucket #{bucket_name}: #{e.message}"}
+        puts error
       end
 
       extraction = Extraction.new(binary_name, local_path, web_id)
       extraction.process
-      puts "status: #{extraction.status}"
-      puts "error: #{extraction.error}" if extraction.error == ExtractionStatus::ERROR
+      status = extraction.status
+      puts "status: #{status}"
+      puts "error: #{extraction.error}" if status == ExtractionStatus::ERROR
+      error = error.merge(extraction.error)
       items = extraction.nested_items.map { |o| Hash[o.each_pair.to_a] }
-      retVal = {"web_id" => web_id, "status" => extraction.status, "error" => extraction.error, "peek_type" => extraction.peek_type, "peek_text" => extraction.peek_text, "nested_items" => items}
-
+      retVal = {"web_id" => web_id, "status" => status, "error" => error, "peek_type" => extraction.peek_type, "peek_text" => extraction.peek_text, "nested_items" => items}
 
       s3_path = "messages/#{web_id}.json"
       begin
@@ -46,12 +51,18 @@ class Extractor
              bucket: "databank-demo-main",
              key: s3_path,
          })
-        puts "Putting json response for object #{object_key} in S3 bucket #{bucket_name} with key #{s3_path}"
+        puts "Putting json response for object #{object_key} with ID #{web_id} in S3 bucket #{bucket_name} with key #{s3_path}"
       rescue StandardError => e
-        puts "Error putting json response for object #{object_key} in S3 bucket #{bucket_name}: #{e.message}"
+        s3_put_status = ExtractionStatus::ERROR
+        s3_put_error = "Error putting json response for object #{object_key} with ID #{web_id} in S3 bucket #{bucket_name}: #{e.message}"
+        puts s3_put_error
       end
 
-      retVal = {"bucket_name" => bucket_name, "object_key" => s3_path}
+      if s3_put_status == ExtractionStatus::SUCCESS
+        retVal = {"bucket_name" => bucket_name, "object_key" => s3_path}
+      else
+        retVal = {"s3_status" => s3_put_status, "s3_put_report" =>s3_put_error}
+      end
 
       sqs = Aws::SQS::Client.new(region: region)
 
@@ -66,9 +77,9 @@ class Extractor
            message_body: retVal.to_json,
            message_attributes: {}
          })
-        puts "Sending message in queue #{queue_name} for object #{object_key}"
+        puts "Sending message in queue #{queue_name} for object #{object_key} with ID #{web_id}"
       rescue StandardError => e
-      puts "Error sending message in queue #{queue_name} for object #{object_key}: #{e.message}"
+      puts "Error sending message in queue #{queue_name} for object #{object_key} with ID #{web_id}: #{e.message}"
       end
 
 

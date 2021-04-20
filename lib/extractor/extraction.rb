@@ -20,6 +20,7 @@ class Extraction
     @binary_name = binary_name
     @storage_path = storage_path
     @id = id
+    @error = Hash.new
   end
 
   ALLOWED_CHAR_NUM = 1024 * 8
@@ -46,14 +47,14 @@ class Extraction
           self.peek_type = PeekType::NONE
           report_problem('invalid encoding for peek text')
         rescue Exception => ex
-          report_problem("invalid encoding and problem characer: #{ex.class}, #{ex.message}")
+          report_problem("invalid encoding and problem character: #{ex.class}, #{ex.message}")
         end
       end
     end
   end
 
   def report_problem(report)
-    self.error = {"task_id" => self.id, "report" => report}
+    self.error = {"task_id" => self.id, "extraction_report" => report}
   end
 
   def extract_features
