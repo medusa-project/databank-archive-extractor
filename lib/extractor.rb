@@ -34,23 +34,27 @@ class Extractor
         )
         puts "Getting object #{object_key} with ID #{web_id} from #{bucket_name}"
       rescue StandardError => e
-        error = {"task_id" => web_id, "s3_get_report" => "Error getting object #{object_key} with ID #{web_id} from S3 bucket #{bucket_name}: #{e.message}"}
+        error.merge!({"task_id" => web_id, "s3_get_report" => "Error getting object #{object_key} with ID #{web_id} from S3 bucket #{bucket_name}: #{e.message}"})
         puts error
       end
 
-      extraction = Extraction.new(binary_name, local_path, web_id)
-      extraction.process
-      status = extraction.status
-      puts "status: #{status}"
-      puts "error: #{extraction.error}" if status == ExtractionStatus::ERROR
-      error = error.merge(extraction.error)
-      items = extraction.nested_items.map { |o| Hash[o.each_pair.to_a] }
-      retVal = {"web_id" => web_id, "status" => status, "error" => error, "peek_type" => extraction.peek_type, "peek_text" => extraction.peek_text, "nested_items" => items}
-
+      begin
+        extraction = Extraction.new(binary_name, local_path, web_id)
+        extraction.process
+        status = extraction.status
+        puts "status: #{status}"
+        puts "error: #{extraction.error}" if status == ExtractionStatus::ERROR
+        error.merge!(extraction.error)
+        items = extraction.nested_items.map { |o| Hash[o.each_pair.to_a] }
+        return_value = {"web_id" => web_id, "status" => status, "error" => error, "peek_type" => extraction.peek_type, "peek_text" => extraction.peek_text, "nested_items" => items}
+      rescue
+        error.merge!({"task_id" => web_id, "extraction_process_report" => "Error extracting #{object_key} with ID #{web_id}: #{e.message}"})
+        return_value = {"web_id" => web_id, "status" => ExtractionStatus::ERROR, "error" => error, "peek_type" => PeekType::NONE, "peek_text" => null, "nested_items" => []}
+      end
 
       begin
         s3_client.put_object({
-             body: retVal.to_json,
+             body: return_value.to_json,
              bucket: "databank-main",
              key: s3_path,
          })
@@ -63,9 +67,9 @@ class Extractor
       end
 
       if s3_put_status == ExtractionStatus::SUCCESS
-        retVal = {"bucket_name" => bucket_name, "object_key" => s3_path}
+        return_value = {"bucket_name" => bucket_name, "object_key" => s3_path}
       else
-        retVal = {"s3_status" => s3_put_status, "s3_put_report" =>s3_put_error}
+        return_value = {"s3_status" => s3_put_status, "s3_put_report" =>s3_put_error}
       end
 
 
@@ -79,7 +83,7 @@ class Extractor
         # Create and send a message.
         sqs.send_message({
            queue_url: queue_url,
-           message_body: retVal.to_json,
+           message_body: return_value.to_json,
            message_attributes: {}
          })
         puts "Sending message in queue #{queue_name} for object #{object_key} with ID #{web_id}"
