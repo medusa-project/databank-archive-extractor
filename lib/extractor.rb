@@ -10,7 +10,7 @@ class Extractor
   def self.extract(bucket_name, object_key, binary_name, web_id)
     begin
       status = ExtractionStatus::ERROR
-      error = ""
+      error = Hash.new
       s3_put_status = ExtractionStatus::SUCCESS
       s3_put_error = ""
       local_path = "./#{binary_name}"
@@ -34,7 +34,7 @@ class Extractor
         )
         puts "Getting object #{object_key} with ID #{web_id} from #{bucket_name}"
       rescue StandardError => e
-        error = "Error getting object #{object_key} with ID #{web_id} from S3 bucket #{bucket_name}: #{e.message}"
+        error = {"task_id" => web_id, "s3_get_report" => "Error getting object #{object_key} with ID #{web_id} from S3 bucket #{bucket_name}: #{e.message}"}
         puts error
       end
 
@@ -43,7 +43,7 @@ class Extractor
       status = extraction.status
       puts "status: #{status}"
       puts "error: #{extraction.error}" if status == ExtractionStatus::ERROR
-      error = extraction.error if status == ExtractionStatus::ERROR
+      error = error.merge(extraction.error)
       items = extraction.nested_items.map { |o| Hash[o.each_pair.to_a] }
       retVal = {"web_id" => web_id, "status" => status, "error" => error, "peek_type" => extraction.peek_type, "peek_text" => extraction.peek_text, "nested_items" => items}
 
@@ -65,7 +65,7 @@ class Extractor
       if s3_put_status == ExtractionStatus::SUCCESS
         retVal = {"bucket_name" => bucket_name, "object_key" => s3_path}
       else
-        retVal = {"status" => s3_put_status, "error" =>s3_put_error}
+        retVal = {"s3_status" => s3_put_status, "s3_put_report" =>s3_put_error}
       end
 
 
