@@ -14,6 +14,7 @@ class Extractor
       s3_put_status = ExtractionStatus::SUCCESS
       s3_put_error = ""
       region = 'us-east-2'
+
       s3_client = Aws::S3::Client.new(region: region)
       del_path = "./mnt/efs/#{bucket_name}_#{web_id}"
       local_path = "#{del_path}/#{object_key}"
@@ -31,18 +32,25 @@ class Extractor
         )
         puts "Getting object #{object_key} with ID #{web_id} from #{bucket_name}"
       rescue StandardError => e
-        error = {"task_id" => web_id, "s3_get_report" => "Error getting object #{object_key} with ID #{web_id} from S3 bucket #{bucket_name}: #{e.message}"}
+        error.merge!({"task_id" => web_id, "s3_get_report" => "Error getting object #{object_key} with ID #{web_id} from S3 bucket #{bucket_name}: #{e.message}"})
         puts error
       end
 
-      extraction = Extraction.new(binary_name, local_path, web_id)
-      extraction.process
-      status = extraction.status
-      puts "status: #{status}"
-      puts "error: #{extraction.error}" if status == ExtractionStatus::ERROR
-      error = error.merge(extraction.error)
-      items = extraction.nested_items.map { |o| Hash[o.each_pair.to_a] }
-      retVal = {"web_id" => web_id, "status" => status, "error" => error, "peek_type" => extraction.peek_type, "peek_text" => extraction.peek_text, "nested_items" => items}
+
+      begin
+        extraction = Extraction.new(binary_name, local_path, web_id)
+        extraction.process
+        status = extraction.status
+        puts "status: #{status}"
+        puts "error: #{extraction.error}" if status == ExtractionStatus::ERROR
+        error.merge!(extraction.error)
+        items = extraction.nested_items.map { |o| Hash[o.each_pair.to_a] }
+        retVal = {"web_id" => web_id, "status" => status, "error" => error, "peek_type" => extraction.peek_type, "peek_text" => extraction.peek_text, "nested_items" => items}
+      rescue  StandardError => e
+        error.merge!({"task_id" => web_id, "extraction_process_report" => "Error extracting #{object_key} with ID #{web_id}: #{e.message}"})
+        retVal = {"web_id" => web_id, "status" => ExtractionStatus::ERROR, "error" => error, "peek_type" => PeekType::NONE, "peek_text" => null, "nested_items" => []}
+      end
+
 
       s3_path = "messages/#{web_id}.json"
       begin
