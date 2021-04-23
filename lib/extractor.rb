@@ -48,18 +48,18 @@ class Extractor
         error.concat(extraction.error)
         items = extraction.nested_items.map { |o| Hash[o.each_pair.to_a] }
         errors = error.map {|o| Hash[o.each_pair.to_a]}
-        retVal = {"web_id" => web_id, "status" => status, "error" => errors, "peek_type" => extraction.peek_type, "peek_text" => extraction.peek_text, "nested_items" => items}
+        return_value = {"web_id" => web_id, "status" => status, "error" => errors, "peek_type" => extraction.peek_type, "peek_text" => extraction.peek_text, "nested_items" => items}
       rescue  StandardError => e
         error.push({"task_id" => web_id, "extraction_process_report" => "Error extracting #{object_key} with ID #{web_id}: #{e.message}"})
         errors = error.map {|o| Hash[o.each_pair.to_a]}
-        retVal = {"web_id" => web_id, "status" => ExtractionStatus::ERROR, "error" => errors, "peek_type" => PeekType::NONE, "peek_text" => null, "nested_items" => []}
+        return_value = {"web_id" => web_id, "status" => ExtractionStatus::ERROR, "error" => errors, "peek_type" => PeekType::NONE, "peek_text" => null, "nested_items" => []}
       end
 
 
       s3_path = "messages/#{web_id}.json"
       begin
         s3_client.put_object({
-             body: retVal.to_json,
+             body: return_value.to_json,
              bucket: "databank-demo-main",
              key: s3_path,
          })
@@ -73,7 +73,7 @@ class Extractor
 
       s3_put_errors = s3_put_error.map {|o| Hash[o.each_pair.to_a]}
 
-      retVal = {"bucket_name" => bucket_name, "object_key" => s3_path, "s3_status" => s3_put_status, "error" => s3_put_errors}
+      return_value = {"bucket_name" => bucket_name, "object_key" => s3_path, "s3_status" => s3_put_status, "error" => s3_put_errors}
 
 
       sqs = Aws::SQS::Client.new(region: region)
@@ -86,7 +86,7 @@ class Extractor
         # Create and send a message.
         sqs.send_message({
            queue_url: queue_url,
-           message_body: retVal.to_json,
+           message_body: return_value.to_json,
            message_attributes: {}
          })
         puts "Sending message in queue #{queue_name} for object #{object_key} with ID #{web_id}"
