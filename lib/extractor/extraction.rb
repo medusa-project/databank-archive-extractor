@@ -10,6 +10,7 @@ require 'rubygems/package'
 
 require_relative 'extraction_status.rb'
 require_relative 'peek_type.rb'
+require_relative 'error_type.rb'
 
 class Extraction
 
@@ -20,7 +21,7 @@ class Extraction
     @binary_name = binary_name
     @storage_path = storage_path
     @id = id
-    @error = Hash.new
+    @error = Array.new
   end
 
   ALLOWED_CHAR_NUM = 1024 * 8
@@ -54,7 +55,7 @@ class Extraction
   end
 
   def report_problem(report)
-    self.error = {"task_id" => self.id, "extraction_report" => report}
+    self.error.push({"error_type" => ErrorType::EXTRACTION, "report" => report})
   end
 
   def extract_features
