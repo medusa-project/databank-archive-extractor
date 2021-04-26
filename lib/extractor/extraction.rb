@@ -11,17 +11,19 @@ require 'rubygems/package'
 require_relative 'extraction_status.rb'
 require_relative 'peek_type.rb'
 require_relative 'error_type.rb'
+require_relative 'mime_type.rb'
 
 class Extraction
 
-  attr_accessor :binary_name, :storage_path, :status, :peek_type, :peek_text, :id, :nested_items, :error
+  attr_accessor :binary_name, :storage_path, :status, :peek_type, :peek_text, :id, :nested_items, :error, :mime_type
 
-  def initialize(binary_name, storage_path, id)
+  def initialize(binary_name, storage_path, id, mime_type)
     @nested_items = Array.new
     @binary_name = binary_name
     @storage_path = storage_path
     @id = id
     @error = Array.new
+    @mime_type = mime_type
   end
 
   ALLOWED_CHAR_NUM = 1024 * 8
@@ -59,19 +61,16 @@ class Extraction
   end
 
   def extract_features
-    mime_guess = top_level_mime || Extraction.mime_from_filename(self.binary_name) || 'application/octet-stream'
-
-    mime_parts = mime_guess.split("/")
-
-    nonzip_archive_subtypes = ['x-7z-compressed', 'x-tar']
-
+    mime_parts = @mime_type.split("/")
     subtype = mime_parts[1].downcase
 
-    if subtype == 'zip'
+
+
+    if MimeType::ZIP.include?(subtype)
       return extract_zip
-    elsif nonzip_archive_subtypes.include?(subtype)
+    elsif MimeType::NON_ZIP_ARCHIVE.include?(subtype)
       return extract_archive
-    elsif self.binary_name.chars.last(6).join == 'tar.gz'
+    elsif MimeType::GZIP.include?(subtype)
       return extract_gzip
     else
       return extract_default
@@ -79,9 +78,6 @@ class Extraction
 
   end
 
-  def top_level_mime
-    Extraction.mime_from_path(self.storage_path)
-  end
 
   def self.mime_from_path(path)
     file_mime_response = MimeMagic.by_path(File.open("#{path}")).to_s

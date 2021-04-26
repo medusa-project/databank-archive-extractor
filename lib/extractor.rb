@@ -8,7 +8,7 @@ require_relative 'extractor/extraction_status.rb'
 require_relative 'extractor/error_type.rb'
 
 class Extractor
-  def self.extract(bucket_name, object_key, binary_name, web_id)
+  def self.extract(bucket_name, object_key, binary_name, web_id, mime_type)
     begin
       status = ExtractionStatus::ERROR
       error = Array.new
@@ -40,7 +40,7 @@ class Extractor
 
 
       begin
-        extraction = Extraction.new(binary_name, local_path, web_id)
+        extraction = Extraction.new(binary_name, local_path, web_id, mime_type)
         extraction.process
         status = extraction.status
         puts "status: #{status}"
