@@ -17,7 +17,7 @@ class Extractor
       region = 'us-east-2'
 
       s3_client = Aws::S3::Client.new(region: region)
-      del_path = "./mnt/efs/#{bucket_name}_#{web_id}"
+      del_path = "/mnt/efs/#{bucket_name}_#{web_id}"
       local_path = "#{del_path}/#{object_key}"
 
       dirname = File.dirname(local_path)
