@@ -8,7 +8,7 @@ require_relative 'extractor/extraction_status.rb'
 require_relative 'extractor/error_type.rb'
 
 class Extractor
-  def self.extract(bucket_name, object_key, binary_name, web_id)
+  def self.extract(bucket_name, object_key, binary_name, web_id, mime_type)
     begin
       status = ExtractionStatus::ERROR
       error = Array.new
@@ -19,7 +19,7 @@ class Extractor
 
       region = 'us-east-2'
       s3_client = Aws::S3::Client.new(region: region)
-      del_path = "./mnt/efs/#{bucket_name}_#{web_id}"
+      del_path = "/mnt/efs/#{bucket_name}_#{web_id}"
       local_path = "#{del_path}/#{object_key}"
 
       dirname = File.dirname(local_path)
@@ -41,7 +41,7 @@ class Extractor
       end
 
       begin
-        extraction = Extraction.new(binary_name, local_path, web_id)
+        extraction = Extraction.new(binary_name, local_path, web_id, mime_type)
         extraction.process
         status = extraction.status
         puts "status: #{status}"
