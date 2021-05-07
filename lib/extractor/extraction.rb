@@ -196,7 +196,7 @@ class Extraction
             if !is_ds_store(entry_path) && !is_mac_thing(entry_path)
               entry_paths << entry_path
 
-              if is_directory(entry.pathname)
+              if entry.directory? || is_directory(entry.pathname)
 
                 create_item(entry_path,
                             name_part(entry_path),
@@ -210,14 +210,7 @@ class Extraction
                 extracted_entry_dir = File.dirname(extracted_entry_path)
                 FileUtils.mkdir_p extracted_entry_dir
 
-                entry_size = 0
-
-                File.open(extracted_entry_path, 'wb') do |entry_file|
-                  ar.read_data(1024) do |x|
-                    entry_file.write(x)
-                    entry_size = entry_size + x.length
-                  end
-                end
+                File.open(extracted_entry_path, 'wb')
 
                 raise("extracting non-zip entry not working!") unless File.exist?(extracted_entry_path)
 
@@ -291,14 +284,7 @@ class Extraction
               extracted_entry_dir = File.dirname(extracted_entry_path)
               FileUtils.mkdir_p extracted_entry_dir
 
-              entry_size = 0
-
-              File.open(extracted_entry_path, 'wb') do |entry_file|
-                entry.read(1024) do |x|
-                  entry_file.write(x)
-                  entry_size = entry_size + x.length
-                end
-              end
+              File.open(extracted_entry_path, 'wb')
 
               raise("extracting gzip entry not working!") unless File.exist?(extracted_entry_path)
 
@@ -365,7 +351,7 @@ class Extraction
   end
 
   def is_directory(path)
-    ends_in_slash(path) && !is_ds_store(path) && !is_mac_thing(path)
+    File.directory?(path) || (ends_in_slash(path) && !is_ds_store(path) && !is_mac_thing(path))
   end
 
   def is_mac_thing(path)
