@@ -77,8 +77,10 @@ class Extraction
   end
 
   def self.mime_from_path(path)
+    file = File.open("#{path}")
+    file_mime_response = MimeMagic.by_path(file).to_s
+    file.close
 
-    file_mime_response = MimeMagic.by_path(File.open("#{path}")).to_s
     if file_mime_response.length > 0
       file_mime_response
     else
@@ -210,7 +212,7 @@ class Extraction
                 extracted_entry_dir = File.dirname(extracted_entry_path)
                 FileUtils.mkdir_p extracted_entry_dir
 
-                File.open(extracted_entry_path, 'wb')
+                file = File.open(extracted_entry_path, 'wb')
 
                 raise("extracting non-zip entry not working!") unless File.exist?(extracted_entry_path)
 
@@ -224,7 +226,7 @@ class Extraction
                             entry.size,
                             mime_guess,
                             false)
-
+                file.close
                 File.delete(extracted_entry_path) if File.exist?(extracted_entry_path)
               end
 
@@ -284,7 +286,7 @@ class Extraction
               extracted_entry_dir = File.dirname(extracted_entry_path)
               FileUtils.mkdir_p extracted_entry_dir
 
-              File.open(extracted_entry_path, 'wb')
+              file = File.open(extracted_entry_path, 'wb')
 
               raise("extracting gzip entry not working!") unless File.exist?(extracted_entry_path)
 
@@ -298,7 +300,7 @@ class Extraction
                           entry.size,
                           mime_guess,
                           false)
-
+              file.close
               File.delete(extracted_entry_path) if File.exist?(extracted_entry_path)
             end
 
