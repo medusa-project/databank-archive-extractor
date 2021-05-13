@@ -10,17 +10,25 @@ require_relative 'extractor/error_type.rb'
 class Extractor
   def self.extract(bucket_name, object_key, binary_name, web_id, mime_type)
     begin
+      Aws.config[:s3] ={
+          endpoint: 'http://minio:9000',
+          access_key_id: 'minioadmin',
+          secret_access_key: 'minioadmin',
+          force_path_style: true,
+          region: 'us-east-2'
+      }
+
       status = ExtractionStatus::ERROR
       error = Array.new
       s3_put_status = ExtractionStatus::SUCCESS
       s3_put_error = Array.new
-      local_path = "./#{binary_name}"
-      s3_path = "messages/#{web_id}.json"
 
-      region = 'us-east-2'
-      s3_client = Aws::S3::Client.new(region: region)
+      region = 'elasticmq'
+      s3_client = Aws::S3::Client.new
+
       del_path = "/mnt/efs/#{bucket_name}_#{web_id}"
       local_path = "#{del_path}/#{object_key}"
+      s3_path = "messages/#{web_id}.json"
 
       dirname = File.dirname(local_path)
       unless File.directory?(dirname)
@@ -28,11 +36,7 @@ class Extractor
       end
 
       begin
-        s3_client.get_object(
-            response_target: local_path,
-            bucket: bucket_name,
-            key: object_key,
-        )
+        FileUtils.cp(binary_name, local_path)
         puts "Getting object #{object_key} with ID #{web_id} from #{bucket_name}"
       rescue StandardError => e
         s3_error = "Error getting object #{object_key} with ID #{web_id} from S3 bucket #{bucket_name}: #{e.message}"
@@ -58,10 +62,10 @@ class Extractor
 
       begin
         s3_client.put_object({
-             body: return_value.to_json,
-             bucket: "databank-main",
-             key: s3_path,
-         })
+                                 body: return_value.to_json,
+                                 bucket: "databank-local-main",
+                                 key: s3_path,
+                             })
         puts "Putting json response for object #{object_key} with ID #{web_id} in S3 bucket #{bucket_name} with key #{s3_path}"
       rescue StandardError => e
         s3_put_status = ExtractionStatus::ERROR
@@ -74,22 +78,23 @@ class Extractor
       s3_put_errors = s3_put_error.map {|o| Hash[o.each_pair.to_a]}
       return_value = {"bucket_name" => bucket_name, "object_key" => s3_path, "s3_status" => s3_put_status, "error" => s3_put_errors}
 
-      sqs = Aws::SQS::Client.new(region: region)
+      endpoint = "http://sqs-mock:9324";
+      sqs = Aws::SQS::Client.new(region: region, endpoint: endpoint, access_key_id: 'x', secret_access_key: 'x')
 
       # Send a message to a queue.
-      queue_name = "extractor-to-databank-prod"
-      queue_url = sqs.get_queue_url(queue_name: queue_name).queue_url
+      queue_name = "extractor-to-databank"
+      queue_url = "http://sqs-mock:9324/queue/#{queue_name}"
 
       begin
         # Create and send a message.
         sqs.send_message({
-           queue_url: queue_url,
-           message_body: return_value.to_json,
-           message_attributes: {}
-         })
+                             queue_url: queue_url,
+                             message_body: return_value.to_json,
+                             message_attributes: {}
+                         })
         puts "Sending message in queue #{queue_name} for object #{object_key} with ID #{web_id}"
       rescue StandardError => e
-      puts "Error sending message in queue #{queue_name} for object #{object_key} with ID #{web_id}: #{e.message}"
+        puts "Error sending message in queue #{queue_name} for object #{object_key} with ID #{web_id}: #{e.message}"
       end
 
     ensure
@@ -97,6 +102,6 @@ class Extractor
       FileUtils.rm_rf(del_path, :secure => true)
 
     end
-   end
+  end
 
 end
