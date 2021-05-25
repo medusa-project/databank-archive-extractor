@@ -36,7 +36,11 @@ class Extractor
       end
 
       begin
-        FileUtils.cp(binary_name, local_path)
+        s3_client.get_object(
+            response_target: local_path,
+            bucket: bucket_name,
+            key: object_key,
+        )
         puts "Getting object #{object_key} with ID #{web_id} from #{bucket_name}"
       rescue StandardError => e
         s3_error = "Error getting object #{object_key} with ID #{web_id} from S3 bucket #{bucket_name}: #{e.message}"
