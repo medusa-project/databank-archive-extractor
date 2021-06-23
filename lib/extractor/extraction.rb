@@ -121,7 +121,7 @@ class Extraction
             entry_path = valid_entry_path(entry.name)
 
 
-            if entry_path && !is_ds_store(entry_path) && !is_mac_thing(entry_path)
+            if entry_path && !is_ds_store(entry_path) && !is_mac_thing(entry_path) && !is_mac_tar_thing(entry_path)
 
               entry_paths << entry_path
 
@@ -195,7 +195,7 @@ class Extraction
 
           if entry_path
 
-            if !is_ds_store(entry_path) && !is_mac_thing(entry_path)
+            if !is_ds_store(entry_path) && !is_mac_thing(entry_path) && !is_mac_tar_thing(entry_path)
               entry_paths << entry_path
 
               if entry.directory? || is_directory(entry.pathname)
