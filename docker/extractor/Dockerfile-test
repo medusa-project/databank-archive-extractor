@@ -24,4 +24,5 @@ RUN gem install bundler && bundle install
 # Copy the main application, except whatever is listed in .dockerignore.
 COPY . ./
 
-CMD ["rake", "test"]
+RUN rake test
+#CMD ["rake", "test"]
