@@ -5,49 +5,51 @@ require 'mimemagic'
 require 'mimemagic/overlay'
 require 'zip'
 require 'zlib'
-require 'libarchive'
+require 'ffi-libarchive'
 require 'rubygems/package'
+require 'config'
+require 'logger'
 
-require_relative 'extraction_status.rb'
-require_relative 'peek_type.rb'
-require_relative 'error_type.rb'
-require_relative 'mime_type.rb'
+require_relative 'extraction_status'
+require_relative 'extraction_type'
+require_relative 'peek_type'
+require_relative 'error_type'
+require_relative 'mime_type'
 
 class Extraction
 
   attr_accessor :binary_name, :storage_path, :status, :peek_type, :peek_text, :id, :nested_items, :error, :mime_type
-
+  ALLOWED_CHAR_NUM = 1024 * 8
+  ALLOWED_DISPLAY_BYTES = ALLOWED_CHAR_NUM * 8
+  LOGGER = Logger.new(STDOUT)
   def initialize(binary_name, storage_path, id, mime_type)
-    @nested_items = Array.new
     @binary_name = binary_name
     @storage_path = storage_path
     @id = id
-    @error = Array.new
     @mime_type = mime_type
+    @nested_items = []
+    @error = []
   end
-
-  ALLOWED_CHAR_NUM = 1024 * 8
-  ALLOWED_DISPLAY_BYTES = ALLOWED_CHAR_NUM * 8
 
   def process
     begin
       features_extracted = extract_features
       if features_extracted
-        self.status = ExtractionStatus::SUCCESS
+        @status = ExtractionStatus::SUCCESS
       else
-        self.status = ExtractionStatus::ERROR
+        @status = ExtractionStatus::ERROR
       end
     rescue StandardError => error
-      self.status = ExtractionStatus::ERROR
-      self.peek_type = PeekType::NONE
+      @status = ExtractionStatus::ERROR
+      @peek_type = PeekType::NONE
       report_problem(error.message)
     ensure
-      if self.peek_text && self.peek_text.encoding.name != 'UTF-8'
+      if @peek_text && @peek_text.encoding.name != 'UTF-8'
         begin
-          self.peek_text.encode('UTF-8')
+          @peek_text.encode('UTF-8')
         rescue Encoding::UndefinedConversionError
-          self.peek_text = nil
-          self.peek_type = PeekType::NONE
+          @peek_text = nil
+          @peek_type = PeekType::NONE
           report_problem('invalid encoding for peek text')
         rescue Exception => ex
           report_problem("invalid encoding and problem character: #{ex.class}, #{ex.message}")
@@ -57,14 +59,12 @@ class Extraction
   end
 
   def report_problem(report)
-    self.error.push({"error_type" => ErrorType::EXTRACTION, "report" => report})
+    @error.push({"error_type" => ErrorType::EXTRACTION, "report" => report})
   end
 
   def extract_features
     mime_parts = @mime_type.split("/")
     subtype = mime_parts[1].downcase
-
-
 
     if MimeType::ZIP.include?(subtype)
       return extract_zip
@@ -75,11 +75,10 @@ class Extraction
     else
       return extract_default
     end
-
   end
 
 
-  def self.mime_from_path(path)
+  def mime_from_path(path)
     file = File.open("#{path}")
     file_mime_response = MimeMagic.by_path(file).to_s
     file.close
@@ -97,7 +96,7 @@ class Extraction
     end
   end
 
-  def self.mime_from_filename(filename)
+  def mime_from_filename(filename)
     mime_guesses = MIME::Types.type_for(filename).first.content_type
     if mime_guesses.length > 0
       mime_guesses
@@ -107,78 +106,27 @@ class Extraction
   end
 
   def create_item(item_path, item_name, item_size, media_type, is_directory)
-    item = {"item_name" => item_name, "item_path" => item_path, "item_size" => item_size, "media_type" => media_type, "is_directory" => is_directory}
+    item = {"item_name" => item_name, "item_path" => item_path, "item_size" => item_size, "media_type" => media_type,
+            "is_directory" => is_directory}
     @nested_items.push(item)
-
   end
 
   def extract_zip
     begin
-      puts "Extracting zip file #{binary_name}"
+      LOGGER.info("Extracting zip file #{@binary_name}")
       entry_paths = []
-      Zip::File.open(self.storage_path) do |zip_file|
+      Zip::File.open(@storage_path) do |zip_file|
         zip_file.each do |entry|
-
           if entry.name_safe?
-
-            entry_path = valid_entry_path(entry.name)
-
-
-            if entry_path && !is_ds_store(entry_path) && !is_mac_thing(entry_path) && !is_mac_tar_thing(entry_path)
-
-              entry_paths << entry_path
-
-              if is_directory(entry.name)
-
-                create_item(entry_path,
-                            name_part(entry_path),
-                            entry.size,
-                            'directory',
-                            true)
-
-              else
-
-                storage_dir = File.dirname(storage_path)
-                extracted_entry_path = File.join(storage_dir, entry_path)
-                extracted_entry_dir = File.dirname(extracted_entry_path)
-                FileUtils.mkdir_p extracted_entry_dir
-
-                raise Exception.new("extracted entry somehow already there?!!?!") if File.exist?(extracted_entry_path)
-
-                entry.extract(extracted_entry_path)
-
-                raise Exception.new("extracting entry not working!") unless File.exist?(extracted_entry_path)
-
-                mime_guess = Extraction.mime_from_path(extracted_entry_path) ||
-                    Extraction.mime_from_filename(entry.name) ||
-                    'application/octet-stream'
-
-                create_item(entry_path,
-                            name_part(entry_path),
-                            entry.size,
-                            mime_guess,
-                            false)
-                File.delete(extracted_entry_path) if File.exist?(extracted_entry_path)
-              end
-
-            end
+            entry_paths = extract_entry(entry, entry.name, entry_paths, ExtractionType::ZIP)
           end
         end
       end
-
-
-      if entry_paths.length > 0
-        self.peek_type = PeekType::LISTING
-        self.peek_text = entry_paths_arr_to_html(entry_paths)
-      else
-        self.peek_type = PeekType::NONE
-        report_problem("no items found for zip listing for task #{self.id}")
-      end
-
+      handle_entry_paths(entry_paths)
       return true
     rescue StandardError => ex
-      self.status = ExtractionStatus::ERROR
-      self.peek_type = PeekType::NONE
+      @status = ExtractionStatus::ERROR
+      @peek_type = PeekType::NONE
       report_problem("problem extracting zip listing for task: #{ex.message}")
       #return false
       raise ex
@@ -187,161 +135,112 @@ class Extraction
 
   def extract_archive
     begin
-      puts "Extracting archive file #{binary_name}"
+      LOGGER.info("Extracting archive file #{@binary_name}")
       entry_paths = []
-
       Archive.read_open_filename(self.storage_path) do |ar|
         while entry = ar.next_header
-
-          entry_path = valid_entry_path(entry.pathname)
-
-          if entry_path
-
-            if !is_ds_store(entry_path) && !is_mac_thing(entry_path) && !is_mac_tar_thing(entry_path)
-              entry_paths << entry_path
-
-              if entry.directory? || is_directory(entry.pathname)
-
-                create_item(entry_path,
-                            name_part(entry_path),
-                            entry.size,
-                            'directory',
-                            true)
-              else
-
-                storage_dir = File.dirname(storage_path)
-                extracted_entry_path = File.join(storage_dir, entry_path)
-                extracted_entry_dir = File.dirname(extracted_entry_path)
-                FileUtils.mkdir_p extracted_entry_dir
-
-                file = File.open(extracted_entry_path, 'wb')
-
-                raise("extracting non-zip entry not working!") unless File.exist?(extracted_entry_path)
-
-                mime_guess = Extraction.mime_from_path(extracted_entry_path) ||
-                    mime_from_filename(entry.name) ||
-                    'application/octet-stream'
-
-
-                create_item(entry_path,
-                            name_part(entry_path),
-                            entry.size,
-                            mime_guess,
-                            false)
-                file.close
-                File.delete(extracted_entry_path) if File.exist?(extracted_entry_path)
-              end
-
-            end
-
-          end
+          entry_paths = extract_entry(entry, entry.pathname, entry_paths, ExtractionType::ARCHIVE)
         end
       end
-
-      if entry_paths.length > 0
-        self.peek_type = PeekType::LISTING
-        self.peek_text = entry_paths_arr_to_html(entry_paths)
-        return true
-      else
-        self.peek_type = PeekType::NONE
-        report_problem("no items found for archive listing for task #{self.id}")
-        return false
-      end
+      handle_entry_paths(entry_paths)
 
     rescue StandardError => ex
-      self.status = ExtractionStatus::ERROR
-      self.peek_type = PeekType::NONE
-
-      report_problem("problem extracting extract listing for task #{self.id}: #{ex.message}")
+      LOGGER.error(ex)
+      @status = ExtractionStatus::ERROR
+      @peek_type = PeekType::NONE
+      report_problem("problem extracting extract listing for task #{@id}: #{ex.message}")
       return false
     end
   end
 
   def extract_gzip
     begin
-      puts "Extracting gzip file #{binary_name}"
+      LOGGER.info("Extracting gzip file #{@binary_name}")
       entry_paths = []
 
-      tar_extract = Gem::Package::TarReader.new(Zlib::GzipReader.open(self.storage_path))
-      tar_extract.rewind # The extract has to be rewinded after every iteration
+      tar_extract = Gem::Package::TarReader.new(Zlib::GzipReader.open(@storage_path))
+      tar_extract.rewind # The extract has to be rewound after every iteration
       tar_extract.each do |entry|
-
-        entry_path = valid_entry_path(entry.full_name)
-        if entry_path
-
-          if !is_ds_store(entry_path) && !is_mac_thing(entry_path) && !is_mac_tar_thing(entry_path)
-
-
-            entry_paths << entry_path
-
-            if entry.directory?
-
-              create_item(entry_path,
-                          name_part(entry_path),
-                          entry.size,
-                          'directory',
-                          true)
-            else
-
-              storage_dir = File.dirname(storage_path)
-              extracted_entry_path = File.join(storage_dir, entry_path)
-              extracted_entry_dir = File.dirname(extracted_entry_path)
-              FileUtils.mkdir_p extracted_entry_dir
-
-              file = File.open(extracted_entry_path, 'wb')
-
-              raise("extracting gzip entry not working!") unless File.exist?(extracted_entry_path)
-
-              mime_guess = Extraction.mime_from_path(extracted_entry_path) ||
-                  mime_from_filename(entry.name) ||
-                  'application/octet-stream'
-
-
-              create_item(entry_path,
-                          name_part(entry_path),
-                          entry.size,
-                          mime_guess,
-                          false)
-              file.close
-              File.delete(extracted_entry_path) if File.exist?(extracted_entry_path)
-            end
-
-          end
-
-        end
+        entry_paths = extract_entry(entry, entry.full_name, entry_paths, ExtractionType::GZIP)
       end
-
-      if entry_paths.length > 0
-        self.peek_type = PeekType::LISTING
-        self.peek_text = entry_paths_arr_to_html(entry_paths)
-        return true
-      else
-        self.peek_type = PeekType::NONE
-        report_problem("no items found for archive listing for task #{self.id}")
-        return false
-      end
+      handle_entry_paths(entry_paths)
 
     rescue StandardError => ex
-      self.status = ExtractionStatus::ERROR
-      self.peek_type = PeekType::NONE
+      @status = ExtractionStatus::ERROR
+      @peek_type = PeekType::NONE
 
-      report_problem("problem extracting extract listing for task #{self.id}: #{ex.message}")
+      report_problem("problem extracting extract listing for task #{@id}: #{ex.message}")
       return false
-
-      tar_extract.close
     end
+  ensure
+    tar_extract.close
+  end
 
+  def extract_entry(entry, entry_name, entry_paths, type)
+    entry_path = valid_entry_path(entry_name)
+    if entry_path && !is_ds_store(entry_path) && !is_mac_thing(entry_path) && !is_mac_tar_thing(entry_path)
+      entry_paths << entry_path
+      if entry.directory? || is_directory(entry_name)
+        create_item(entry_path,
+                    name_part(entry_path),
+                    entry.size,
+                    'directory',
+                    true)
+      else
+        storage_dir = File.dirname(storage_path)
+        extracted_entry_path = File.join(storage_dir, entry_path)
+        extracted_entry_dir = File.dirname(extracted_entry_path)
+        FileUtils.mkdir_p extracted_entry_dir
+
+        raise Exception.new("extracted entry somehow already there?!!?!") if File.exist?(extracted_entry_path)
+
+        file = nil
+        case type
+        when ExtractionType::ZIP
+          entry.extract(extracted_entry_path)
+        else
+          file = File.open(extracted_entry_path, 'wb')
+        end
+        raise("extracting #{type} entry not working!") unless File.exist?(extracted_entry_path)
+
+        mime_guess = mime_from_path(extracted_entry_path) ||
+          mime_from_filename(entry_name) ||
+          'application/octet-stream'
+
+        create_item(entry_path,
+                    name_part(entry_path),
+                    entry.size,
+                    mime_guess,
+                    false)
+        file.close if file
+        File.delete(extracted_entry_path) if File.exist?(extracted_entry_path)
+      end
+    end
+    entry_paths
+  end
+
+  def handle_entry_paths(entry_paths)
+    if entry_paths.length > 0
+      @peek_type = PeekType::LISTING
+      @peek_text = entry_paths_arr_to_html(entry_paths)
+      puts @peek_text
+      return true
+    else
+      @peek_type = PeekType::NONE
+      report_problem("no items found for archive listing for task #{@id}")
+      return false
+    end
   end
 
   def extract_default
-    puts "Default extraction for #{binary_name}"
+    LOGGER.info("Default extraction for #{@binary_name}")
     begin
-      self.peek_type = PeekType::NONE
+      @peek_type = PeekType::NONE
       return true
     rescue StandardError => ex
-      self.status = ExtractionStatus::ERROR
-      self.peek_type = PeekType::NONE
-      report_problem("problem creating default peek for task #{self.id}")
+      @status = ExtractionStatus::ERROR
+      @peek_type = PeekType::NONE
+      report_problem("problem creating default peek for task #{@id}: #{ex}")
       return false
     end
   end
@@ -391,7 +290,7 @@ class Extraction
   def entry_paths_arr_to_html(entry_paths)
     return_string = '<span class="glyphicon glyphicon-folder-open"></span> '
 
-    return_string << self.binary_name
+    return_string << @binary_name
 
     entry_paths.each do |entry_path|
 
