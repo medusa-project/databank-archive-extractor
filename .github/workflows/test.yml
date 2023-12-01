@@ -18,3 +18,4 @@ jobs:
           context: .
           file: ./docker/extractor/Dockerfile-test
           tags: extractor-test
+          platforms: linux/arm64

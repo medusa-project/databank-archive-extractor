@@ -110,17 +110,19 @@ class ArchiveExtractor
 
   def put_json_response(return_value, s3_path)
     s3_put_error = []
+    json_bucket = Settings.aws.s3.json_bucket
     begin
       @s3.put_object({
                        body: return_value.to_json,
-                       bucket: Settings.aws.s3.json_bucket,
+                       bucket: json_bucket,
                        key: s3_path,
                      })
-      LOGGER.info("Putting json response for object #{@object_key} with ID #{@web_id} in S3 bucket #{@bucket_name} with key #{s3_path}")
+      LOGGER.info(return_value.to_json)
+      LOGGER.info("Putting json response for object #{@object_key} with ID #{@web_id} in S3 bucket #{json_bucket} with key #{s3_path}")
       s3_put_status = ExtractionStatus::SUCCESS
     rescue StandardError => e
       s3_put_status = ExtractionStatus::ERROR
-      s3_put_error_message = "Error putting json response for object #{@object_key} with ID #{@web_id} in S3 bucket #{@bucket_name}: #{e.message}"
+      s3_put_error_message = "Error putting json response for object #{@object_key} with ID #{@web_id} in S3 bucket #{json_bucket}: #{e.message}"
       s3_put_error.push({"error_type" => ErrorType::S3_PUT, "report" => s3_put_error_message})
       LOGGER.error(s3_put_error_message)
     end
