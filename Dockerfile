@@ -1,9 +1,10 @@
 # N.B.: this must match the Ruby version in the Gemfile, and /.ruby-version.
 FROM ruby:3.1.2
 
-ENV RAILS_ENV=production
+ENV RUBY_ENV=demo
 ENV RAILS_LOG_TO_STDOUT=true
 ENV RAILS_SERVE_STATIC_FILES=true
+ENV RUBY_HOME=/extractor
 
 RUN apt-get update && apt-get install -y \
   build-essential \
@@ -11,9 +12,9 @@ RUN apt-get update && apt-get install -y \
   libpq-dev \
   libarchive-dev
 
-RUN mkdir app
-WORKDIR app
 
+RUN mkdir extractor
+WORKDIR extractor
 
 # Copy the Gemfile as well as the Gemfile.lock and install gems.
 # This is a separate step so the dependencies will be cached.

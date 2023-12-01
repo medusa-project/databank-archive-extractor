@@ -10,8 +10,6 @@ gem 'rubyzip'
 gem 'config'
 
 # Use archive for non-zip archive files
-# gem 'libarchive'
-# gem 'libarchive-ruby'
 gem 'ffi-libarchive'
 
 # Use os to interact with operating system
