@@ -223,7 +223,6 @@ class Extraction
     if entry_paths.length > 0
       @peek_type = PeekType::LISTING
       @peek_text = entry_paths_arr_to_html(entry_paths)
-      puts @peek_text
       return true
     else
       @peek_type = PeekType::NONE

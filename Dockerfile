@@ -1,5 +1,5 @@
 # N.B.: this must match the Ruby version in the Gemfile, and /.ruby-version.
-FROM ruby:3.1.2
+FROM --platform=linux/arm64 ruby:3.1.2
 
 ENV RUBY_ENV=demo
 ENV RAILS_LOG_TO_STDOUT=true
