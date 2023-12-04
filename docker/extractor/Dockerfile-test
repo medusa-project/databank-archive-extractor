@@ -1,0 +1,28 @@
+FROM --platform=linux/arm64 ruby:3.1.2
+#FROM ruby:3.1.2
+
+ENV RUBY_ENV=test
+ENV RAILS_LOG_TO_STDOUT=true
+ENV RUBY_HOME=/extractor
+ENV IS_DOCKER=true
+
+RUN apt-get update && apt-get install -y \
+  build-essential \
+  git \
+  libpq-dev \
+  libarchive-dev
+
+# Copy the Gemfile as well as the Gemfile.lock and install gems.
+# This is a separate step so the dependencies will be cached.
+RUN mkdir extractor
+WORKDIR extractor
+
+#COPY Gemfile Gemfile.lock  ./
+COPY Gemfile ./
+RUN gem install bundler && bundle install
+
+# Copy the main application, except whatever is listed in .dockerignore.
+COPY . ./
+
+#RUN rake test
+CMD ["rake", "test"]
