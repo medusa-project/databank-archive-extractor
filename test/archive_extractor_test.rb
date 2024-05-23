@@ -20,6 +20,9 @@ class TestArchiveExtractor < Minitest::Test
     @archive_extractor.web_id = 'test-zip'
     @archive_extractor.mime_type = 'application/zip'
     @archive_extractor.object_key = 'test.zip'
+    resp = Minitest::Mock.new
+    resp.expect(:object_size, 23_456_789_123)
+    @s3.expect(:get_object_attributes, resp, [{bucket: 'test-bucket', key: 'test.zip', object_attributes: ['ObjectSize']}])
     del_path = "#{Settings.aws.efs.mount_point}#{@archive_extractor.bucket_name}_#{@archive_extractor.web_id}"
     local_path = "#{del_path}/#{@archive_extractor.object_key}"
     file_path = "#{ENV['RUBY_HOME']}/test/test.zip"
@@ -46,6 +49,36 @@ class TestArchiveExtractor < Minitest::Test
     # verify
     assert_mock(@s3)
     assert_mock(@sqs)
+  end
+
+  def test_get_storage_path_small
+    # setup
+    resp = Minitest::Mock.new
+    @s3.expect(:get_object_attributes, resp, [{bucket: 'test-bucket', key: 'test-key', object_attributes: ['ObjectSize']}])
+    resp.expect(:object_size, 12_345)
+
+    # test
+    storage_path = @archive_extractor.get_storage_path
+
+    # verify
+    assert_mock(@s3)
+    assert_mock(resp)
+    assert_equal(Settings.ephemeral_storage_path, storage_path)
+  end
+
+  def test_get_storage_path_large
+    # setup
+    resp = Minitest::Mock.new
+    @s3.expect(:get_object_attributes, resp, [{bucket: 'test-bucket', key: 'test-key', object_attributes: ['ObjectSize']}])
+    resp.expect(:object_size, 23_456_789_123)
+
+    # test
+    storage_path = @archive_extractor.get_storage_path
+
+    # verify
+    assert_mock(@s3)
+    assert_mock(resp)
+    assert_equal(Settings.aws.efs.mount_point, storage_path)
   end
 
   def test_get_object
