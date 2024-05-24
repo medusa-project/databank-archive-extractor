@@ -6,3 +6,4 @@ aws:
         queue_url: "https://sqs.us-east-2.amazonaws.com/721945215539/extractor-to-databank-demo"
     s3:
         json_bucket: "databank-demo-main"
+ephemeral_storage_path: "/tmp/extractor/"

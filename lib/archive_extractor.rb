@@ -14,7 +14,9 @@ require_relative 'extractor/error_type'
 class ArchiveExtractor
   attr_accessor :s3, :sqs, :bucket_name, :object_key, :binary_name, :web_id, :mime_type, :extraction
   Config.load_and_set_settings(Config.setting_files("#{ENV['RUBY_HOME']}/config", ENV['RUBY_ENV']))
+  STDOUT.sync = true
   LOGGER = Logger.new(STDOUT)
+  GIGABYTE = 2**30
 
   def initialize(bucket_name, object_key, binary_name, web_id, mime_type, sqs, s3)
     @bucket_name = bucket_name
@@ -29,8 +31,10 @@ class ArchiveExtractor
   def extract
     begin
       error = []
-      
-      del_path = "#{Settings.aws.efs.mount_point}#{@bucket_name}_#{@web_id}"
+
+      storage_path = get_storage_path
+      LOGGER.info("Storage path: #{storage_path}")
+      del_path = "#{storage_path}#{@bucket_name}_#{@web_id}"
       local_path = "#{del_path}/#{@object_key}"
 
       dirname = File.dirname(local_path)
@@ -54,6 +58,17 @@ class ArchiveExtractor
       FileUtils.rm_rf(dirname, :secure => true)
       FileUtils.rm_rf(del_path, :secure => true)
     end
+  end
+
+  def get_storage_path
+    resp = @s3.get_object_attributes({
+                                       bucket: @bucket_name,
+                                       key: @object_key,
+                                       object_attributes: ['ObjectSize']
+                                     })
+    object_size = resp.object_size
+    LOGGER.info("#{@web_id} size:  #{object_size}")
+    object_size > 19 * GIGABYTE ? Settings.aws.efs.mount_point : Settings.ephemeral_storage_path
   end
 
   def get_object(local_path, error)

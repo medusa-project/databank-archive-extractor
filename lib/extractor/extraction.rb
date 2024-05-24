@@ -19,9 +19,9 @@ require_relative 'mime_type'
 class Extraction
 
   attr_accessor :binary_name, :storage_path, :status, :peek_type, :peek_text, :id, :nested_items, :error, :mime_type
-
   ALLOWED_CHAR_NUM = 1024 * 8
   ALLOWED_DISPLAY_BYTES = ALLOWED_CHAR_NUM * 8
+  STDOUT.sync = true
   LOGGER = Logger.new(STDOUT)
   def initialize(binary_name, storage_path, id, mime_type)
     @binary_name = binary_name
