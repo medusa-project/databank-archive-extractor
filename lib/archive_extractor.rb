@@ -45,14 +45,14 @@ class ArchiveExtractor
       get_object(local_path, error)
 
       extraction = Extraction.new(@binary_name, local_path, @web_id, @mime_type)
-      return_value = perform_extraction(extraction, error)
+      extraction_return_value = perform_extraction(extraction, error)
       s3_path = "messages/#{@web_id}.json"
-      s3_put_status, s3_put_error = put_json_response(return_value, s3_path)
+      s3_put_status, s3_put_error = put_json_response(extraction_return_value, s3_path)
 
       s3_put_errors = s3_put_error.map {|o| Hash[o.each_pair.to_a]}
 
-      return_value = {"bucket_name" => @bucket_name, "object_key" => s3_path, "s3_status" => s3_put_status, "error" => s3_put_errors}
-      send_sqs_message(return_value)
+      s3_message = {"bucket_name" => @bucket_name, "object_key" => s3_path, "s3_status" => s3_put_status, "error" => s3_put_errors}
+      send_sqs_message(s3_message)
 
     ensure
       FileUtils.rm_rf(dirname, :secure => true)
@@ -96,16 +96,16 @@ class ArchiveExtractor
       error.concat(extraction.error)
       items = extraction.nested_items.map { |o| Hash[o.each_pair.to_a] }
       errors = error.map {|o| Hash[o.each_pair.to_a]}
-      return_value = {"web_id" => @web_id, "status" => status, "error" => errors, "peek_type" => extraction.peek_type, "peek_text" => extraction.peek_text, "nested_items" => items}
+      extraction_return_value = {"web_id" => @web_id, "status" => status, "error" => errors, "peek_type" => extraction.peek_type, "peek_text" => extraction.peek_text, "nested_items" => items}
     rescue  StandardError => e
       error.push({"task_id" => @web_id, "extraction_process_report" => "Error extracting #{@object_key} with ID #{@web_id}: #{e.message}"})
       errors = error.map {|o| Hash[o.each_pair.to_a]}
-      return_value = {"web_id" => @web_id, "status" => ExtractionStatus::ERROR, "error" => errors, "peek_type" => PeekType::NONE, "peek_text" => nil, "nested_items" => []}
+      extraction_return_value = {"web_id" => @web_id, "status" => ExtractionStatus::ERROR, "error" => errors, "peek_type" => PeekType::NONE, "peek_text" => nil, "nested_items" => []}
     end
-    return return_value
+    return extraction_return_value
   end
 
-  def send_sqs_message(return_value)
+  def send_sqs_message(s3_message)
     # Send a message to a queue.
     queue_name = Settings.aws.sqs.queue_name
     queue_url = Settings.aws.sqs.queue_url
@@ -114,7 +114,7 @@ class ArchiveExtractor
       # Create and send a message.
       @sqs.send_message({
                           queue_url: queue_url,
-                          message_body: return_value.to_json,
+                          message_body: s3_message.to_json,
                           message_attributes: {}
                         })
       LOGGER.info("Sending message in queue #{queue_name} for object #{@object_key} with ID #{@web_id}")
@@ -123,16 +123,16 @@ class ArchiveExtractor
     end
   end
 
-  def put_json_response(return_value, s3_path)
+  def put_json_response(extraction_return_value, s3_path)
     s3_put_error = []
     json_bucket = Settings.aws.s3.json_bucket
     begin
       @s3.put_object({
-                       body: return_value.to_json,
+                       body: extraction_return_value.to_json,
                        bucket: json_bucket,
                        key: s3_path,
                      })
-      LOGGER.info(return_value.to_json)
+      LOGGER.info(extraction_return_value.to_json)
       LOGGER.info("Putting json response for object #{@object_key} with ID #{@web_id} in S3 bucket #{json_bucket} with key #{s3_path}")
       s3_put_status = ExtractionStatus::SUCCESS
     rescue StandardError => e
