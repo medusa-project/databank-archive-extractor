@@ -68,7 +68,7 @@ class ArchiveExtractor
                                      })
     object_size = resp.object_size
     LOGGER.info("#{@web_id} size:  #{object_size}")
-    object_size > 19 * GIGABYTE ? Settings.aws.efs.mount_point : Settings.ephemeral_storage_path
+    object_size > 15 * GIGABYTE ? Settings.aws.efs.mount_point : Settings.ephemeral_storage_path
   end
 
   def get_object(local_path, error)
