@@ -3,6 +3,7 @@ on:
     branches:
     - test
     - demo
+    - prod
 
 jobs:
   build:
