@@ -78,6 +78,7 @@ class Extraction
     end
   end
 
+
   def mime_from_path(path)
     file = File.open("#{path}")
     file_mime_response = MimeMagic.by_path(file).to_s
@@ -128,7 +129,7 @@ class Extraction
       @status = ExtractionStatus::ERROR
       @peek_type = PeekType::NONE
       report_problem("problem extracting zip listing for task: #{ex.message}")
-
+      #return false
       raise ex
     end
   end

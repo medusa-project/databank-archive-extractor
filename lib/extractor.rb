@@ -14,4 +14,5 @@ class Extractor
     archive_extractor = ArchiveExtractor.new(bucket_name, object_key, binary_name, web_id, mime_type, sqs, s3_client)
     archive_extractor.extract
   end
+
 end
