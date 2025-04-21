@@ -28,3 +28,5 @@ gem 'minitest'
 
 gem 'simplecov'
 
+gem 'nokogiri', '>= 1.18.4'
+
