@@ -1,10 +1,9 @@
 on:
   push:
     branches:
-    - test
-    - demo
-    - prod
-
+    - main
+    - stable
+    - 'bugfix/**'
 jobs:
   build:
     runs-on: ubuntu-latest
