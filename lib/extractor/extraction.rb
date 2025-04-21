@@ -159,7 +159,8 @@ class Extraction
       LOGGER.info("Extracting gzip file #{@binary_name}")
       entry_paths = []
 
-      tar_extract = Gem::Package::TarReader.new(Zlib::GzipReader.open(@storage_path))
+      gzip_extract = Zlib::GzipReader.open(@storage_path)
+      tar_extract = Gem::Package::TarReader.new(gzip_extract)
       tar_extract.rewind # The extract has to be rewound after every iteration
       tar_extract.each do |entry|
         entry_paths = extract_entry(entry, entry.full_name, entry_paths, ExtractionType::GZIP)
@@ -174,6 +175,7 @@ class Extraction
       return false
     end
   ensure
+    gzip_extract.close
     tar_extract.close
   end
 

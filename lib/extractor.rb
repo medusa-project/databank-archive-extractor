@@ -10,8 +10,9 @@ class Extractor
   def self.extract(bucket_name, object_key, binary_name, web_id, mime_type)
     region = Settings.aws.region
     s3_client = Aws::S3::Client.new(region: region)
+    s3_resource = Aws::S3::Resource.new(client: s3_client)
     sqs = Aws::SQS::Client.new(region: region)
-    archive_extractor = ArchiveExtractor.new(bucket_name, object_key, binary_name, web_id, mime_type, sqs, s3_client)
+    archive_extractor = ArchiveExtractor.new(bucket_name, object_key, binary_name, web_id, mime_type, sqs, s3_client, s3_resource)
     archive_extractor.extract
   end
 

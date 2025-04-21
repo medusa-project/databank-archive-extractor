@@ -12,35 +12,34 @@ require_relative 'extractor/extraction_status'
 require_relative 'extractor/error_type'
 
 class ArchiveExtractor
-  attr_accessor :s3, :sqs, :bucket_name, :object_key, :binary_name, :web_id, :mime_type, :extraction
+  attr_accessor :s3_client, :s3_resource, :sqs, :bucket_name, :object_key, :binary_name, :web_id, :mime_type, :extraction
   Config.load_and_set_settings(Config.setting_files("#{ENV['RUBY_HOME']}/config", ENV['RUBY_ENV']))
   STDOUT.sync = true
   LOGGER = Logger.new(STDOUT)
   GIGABYTE = 2**30
 
-  def initialize(bucket_name, object_key, binary_name, web_id, mime_type, sqs, s3)
+  def initialize(bucket_name, object_key, binary_name, web_id, mime_type, sqs, s3_client, s3_resource)
     @bucket_name = bucket_name
     @object_key = object_key
     @binary_name = binary_name
     @web_id = web_id
     @mime_type = mime_type
     @sqs = sqs
-    @s3 = s3
+    @s3_client = s3_client
+    @s3_resource = s3_resource
   end
 
   def extract
     begin
       error = []
-
+      LOGGER.info("Bucket name: #{@bucket_name}, Object key: #{@object_key}, Binary name: #{@binary_name}, Web id: #{@web_id}, Mime type: #{@mime_type}")
       storage_path = get_storage_path
       LOGGER.info("Storage path: #{storage_path}")
       del_path = "#{storage_path}#{@bucket_name}_#{@web_id}"
-      local_path = "#{del_path}/#{@object_key}"
+      local_path = "#{del_path}/#{@binary_name}"
 
       dirname = File.dirname(local_path)
-      unless File.directory?(dirname)
-        FileUtils.mkdir_p(dirname)
-      end
+      FileUtils.mkdir_p(dirname) unless File.directory?(dirname)
 
       get_object(local_path, error)
 
@@ -55,13 +54,15 @@ class ArchiveExtractor
       send_sqs_message(s3_message)
 
     ensure
-      FileUtils.rm_rf(dirname, :secure => true)
-      FileUtils.rm_rf(del_path, :secure => true)
+      FileUtils.rm_rf(dirname, verbose: true)
+      File.directory?(dirname) ? LOGGER.error("Unable to remove #{dirname}") : LOGGER.info("Removed #{dirname}")
+      FileUtils.rm_rf(del_path, verbose: true)
+      File.directory?(del_path) ? LOGGER.error("Unable to remove #{@web_id}") : LOGGER.info("Removed #{@web_id}")
     end
   end
 
   def get_storage_path
-    resp = @s3.get_object_attributes({
+    resp = @s3_client.get_object_attributes({
                                        bucket: @bucket_name,
                                        key: @object_key,
                                        object_attributes: ['ObjectSize']
@@ -73,11 +74,7 @@ class ArchiveExtractor
 
   def get_object(local_path, error)
     begin
-      @s3.get_object({
-                      response_target: local_path,
-                      bucket: @bucket_name,
-                      key: @object_key,
-                     })
+      @s3_resource.bucket(@bucket_name).object(@object_key).download_file(local_path)
       LOGGER.info("Getting object #{@object_key} with ID #{@web_id} from #{@bucket_name}")
     rescue StandardError => e
       s3_error = "Error getting object #{@object_key} with ID #{@web_id} from S3 bucket #{@bucket_name}: #{e.message}"
@@ -98,7 +95,9 @@ class ArchiveExtractor
       errors = error.map {|o| Hash[o.each_pair.to_a]}
       extraction_return_value = {"web_id" => @web_id, "status" => status, "error" => errors, "peek_type" => extraction.peek_type, "peek_text" => extraction.peek_text, "nested_items" => items}
     rescue  StandardError => e
-      error.push({"task_id" => @web_id, "extraction_process_report" => "Error extracting #{@object_key} with ID #{@web_id}: #{e.message}"})
+      error_message = {"task_id" => @web_id, "extraction_process_report" => "Error extracting #{@object_key} with ID #{@web_id}: #{e.message}"}
+      LOGGER.error(error_message)
+      error.push(error_message)
       errors = error.map {|o| Hash[o.each_pair.to_a]}
       extraction_return_value = {"web_id" => @web_id, "status" => ExtractionStatus::ERROR, "error" => errors, "peek_type" => PeekType::NONE, "peek_text" => nil, "nested_items" => []}
     end
@@ -127,7 +126,7 @@ class ArchiveExtractor
     s3_put_error = []
     json_bucket = Settings.aws.s3.json_bucket
     begin
-      @s3.put_object({
+      @s3_client.put_object({
                        body: extraction_return_value.to_json,
                        bucket: json_bucket,
                        key: s3_path,
