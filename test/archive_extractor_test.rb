@@ -37,8 +37,6 @@ class TestArchiveExtractor < Minitest::Test
     @s3_resource.expect(:bucket, mock_bucket, [@archive_extractor.bucket_name])
     mock_bucket.expect(:object, mock_object, [@archive_extractor.object_key])
     mock_object.expect(:download_file, nil, [local_path])
-    # @s3_client.expect(:get_object, nil, [{ response_target: local_path, bucket: @archive_extractor.bucket_name,
-    #                                        key: @archive_extractor.object_key}])
 
     peek_text = "<span class='glyphicon glyphicon-folder-open'></span> test.zip<div class='indent'><span class='glyphicon glyphicon-file'></span> test.txt</div>"
     items = [{'item_name' => 'test.txt', 'item_path' => 'test.txt', 'item_size' => 12, 'media_type' => 'text/plain', 'is_directory' => false}]
@@ -89,6 +87,64 @@ class TestArchiveExtractor < Minitest::Test
     assert_mock(@s3_client)
     assert_mock(resp)
     assert_equal(Settings.aws.efs.mount_point, storage_path)
+  end
+
+  def test_file_exists?
+    # setup
+    storage_path = Settings.aws.efs.mount_point
+    lock_path = "#{storage_path}file-exists-id.lock"
+    local_path = "#{storage_path}file-exists-id"
+    @archive_extractor.web_id = 'file-exists-id'
+
+    # test
+    exists = @archive_extractor.file_exists?(storage_path, lock_path, local_path)
+    lock_path_exists = File.exist?(lock_path)
+
+    # verify
+    assert_equal(false, exists)
+    assert_equal(true, lock_path_exists)
+
+    # cleanup
+    FileUtils.rm(lock_path)
+  end
+
+  def test_file_exists_lock_file_exists
+    # setup
+    storage_path = Settings.aws.efs.mount_point
+    FileUtils.mkdir_p(storage_path) unless File.directory?(storage_path)
+    lock_path = "#{storage_path}file-exists-id.lock"
+    File.new(lock_path, 'w+')
+    local_path = "#{storage_path}file-exists-id"
+    @archive_extractor.web_id = 'file-exists-id'
+
+    # test
+    exists = @archive_extractor.file_exists?(storage_path, lock_path, local_path)
+
+    # verify
+    assert_equal(true, exists)
+
+    # cleanup
+    FileUtils.rm(lock_path)
+  end
+
+  def test_file_exists_local_file_exists
+    # setup
+    storage_path = Settings.aws.efs.mount_point
+    FileUtils.mkdir_p(storage_path) unless File.directory?(storage_path)
+    lock_path = "#{storage_path}file-exists-id.lock"
+    local_path = "#{storage_path}file-exists-id"
+    File.new(local_path, 'w+')
+    @archive_extractor.web_id = 'file-exists-id'
+
+    # test
+    exists = @archive_extractor.file_exists?(storage_path, lock_path, local_path)
+
+    # verify
+    assert_equal(true, exists)
+
+    # cleanup
+    FileUtils.rm(lock_path)
+    FileUtils.rm(local_path)
   end
 
   def test_get_object
