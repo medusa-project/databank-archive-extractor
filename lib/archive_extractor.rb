@@ -37,9 +37,15 @@ class ArchiveExtractor
       LOGGER.info("Storage path: #{storage_path}")
       del_path = "#{storage_path}#{@bucket_name}_#{@web_id}"
       local_path = "#{del_path}/#{@binary_name}"
+      lock_path = "#{storage_path}#{@web_id}.lock"
 
       dirname = File.dirname(local_path)
       FileUtils.mkdir_p(dirname) unless File.directory?(dirname)
+      already_exists = file_exists?(storage_path, lock_path, local_path)
+      LOGGER.info("File already exists? #{already_exists}")
+      if already_exists
+        exit! unless ENV['RUBY_ENV'] == 'test'
+      end
 
       get_object(local_path, error)
 
@@ -58,6 +64,8 @@ class ArchiveExtractor
       File.directory?(dirname) ? LOGGER.error("Unable to remove #{dirname}") : LOGGER.info("Removed #{dirname}")
       FileUtils.rm_rf(del_path, verbose: true)
       File.directory?(del_path) ? LOGGER.error("Unable to remove #{@web_id}") : LOGGER.info("Removed #{@web_id}")
+      FileUtils.rm(lock_path, verbose: true)
+      File.exist?(lock_path) ? LOGGER.error("Unable to remove #{@web_id} lock") : LOGGER.info("Removed #{@web_id} lock")
     end
   end
 
@@ -70,6 +78,14 @@ class ArchiveExtractor
     object_size = resp.object_size
     LOGGER.info("#{@web_id} size:  #{object_size}")
     object_size > 15 * GIGABYTE ? Settings.aws.efs.mount_point : Settings.ephemeral_storage_path
+  end
+
+  def file_exists?(storage_path, lock_path, local_path)
+    lock_file_exists = File.exist?(lock_path)
+    FileUtils.mkdir_p(storage_path) unless File.directory?(storage_path)
+    File.new(lock_path, 'w+') unless lock_file_exists
+    local_file_exists = File.exist?(local_path)
+    lock_file_exists || local_file_exists
   end
 
   def get_object(local_path, error)
