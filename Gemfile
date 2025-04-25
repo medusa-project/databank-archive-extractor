@@ -30,3 +30,5 @@ gem 'simplecov'
 
 gem 'nokogiri', '>= 1.18.8'
 
+gem 'ruby-filemagic', '>= 0.7.1'
+

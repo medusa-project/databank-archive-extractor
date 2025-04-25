@@ -9,6 +9,7 @@ require 'ffi-libarchive'
 require 'rubygems/package'
 require 'config'
 require 'logger'
+require 'ruby-filemagic'
 
 require_relative 'extraction_status'
 require_relative 'extraction_type'
@@ -138,7 +139,7 @@ class Extraction
     begin
       LOGGER.info("Extracting archive file #{@binary_name}")
       entry_paths = []
-      Archive.read_open_filename(self.storage_path) do |ar|
+      Archive.read_open_filename(@storage_path) do |ar|
         while entry = ar.next_header
           entry_paths = extract_entry(entry, entry.pathname, entry_paths, ExtractionType::ARCHIVE)
         end
@@ -149,7 +150,7 @@ class Extraction
       LOGGER.error(ex)
       @status = ExtractionStatus::ERROR
       @peek_type = PeekType::NONE
-      report_problem("problem extracting extract listing for task #{@id}: #{ex.message}")
+      report_problem("problem extracting archive listing for task #{@id}: #{ex.message}")
       return false
     end
   end
@@ -158,12 +159,38 @@ class Extraction
     begin
       LOGGER.info("Extracting gzip file #{@binary_name}")
       entry_paths = []
-
       gzip_extract = Zlib::GzipReader.open(@storage_path)
-      tar_extract = Gem::Package::TarReader.new(gzip_extract)
-      tar_extract.rewind # The extract has to be rewound after every iteration
-      tar_extract.each do |entry|
-        entry_paths = extract_entry(entry, entry.full_name, entry_paths, ExtractionType::GZIP)
+      extracted_mime = FileMagic.new(FileMagic::MAGIC_MIME).buffer(gzip_extract.readline)
+      mime_parts = extracted_mime.split(";")[0].split("/")
+      subtype = mime_parts[1].downcase
+      gzip_extract.rewind
+      if MimeType::TAR.include?(subtype)
+        LOGGER.info("Processing tar gzip #{@binary_name}")
+        begin
+          tar_extract = Gem::Package::TarReader.new(gzip_extract)
+          tar_extract.rewind # The extract has to be rewound after every iteration
+          tar_extract.each do |entry|
+            entry_paths = extract_entry(entry, entry.full_name, entry_paths, ExtractionType::GZIP)
+          end
+
+        ensure
+          tar_extract.close
+        end
+      else
+        LOGGER.info("Processing non tar gzip #{@binary_name}")
+        entry_name = gzip_extract.orig_name
+        entry_path = valid_entry_path(entry_name)
+        if entry_path && !is_ds_store(entry_path) && !is_mac_thing(entry_path) && !is_mac_tar_thing(entry_path)
+          entry_paths << entry_path
+          gzip_extract.readpartial((1024**2)*400) while !gzip_extract.eof?
+          entry_size = gzip_extract.tell
+          mime_guess = mime_from_filename(entry_name) || 'application/octet-stream'
+          create_item(entry_path,
+                      name_part(entry_path),
+                      entry_size,
+                      mime_guess,
+                      false)
+        end
       end
       handle_entry_paths(entry_paths)
 
@@ -171,12 +198,11 @@ class Extraction
       @status = ExtractionStatus::ERROR
       @peek_type = PeekType::NONE
 
-      report_problem("problem extracting extract listing for task #{@id}: #{ex.message}")
+      report_problem("problem extracting gzip listing for task #{@id}: #{ex.message}")
       return false
     end
   ensure
     gzip_extract.close
-    tar_extract.close
   end
 
   def extract_entry(entry, entry_name, entry_paths, type)
@@ -190,7 +216,7 @@ class Extraction
                     'directory',
                     true)
       else
-        storage_dir = File.dirname(storage_path)
+        storage_dir = File.dirname(@storage_path)
         extracted_entry_path = File.join(storage_dir, entry_path)
         extracted_entry_dir = File.dirname(extracted_entry_path)
         FileUtils.mkdir_p extracted_entry_dir

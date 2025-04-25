@@ -40,8 +40,8 @@ class TestExtraction < Minitest::Test
 
   def test_extract_features_gzip
     # setup
-    @extraction.binary_name = 'test.txt.gz'
-    @extraction.storage_path = "#{ENV['RUBY_HOME']}/test/test.txt.gz"
+    @extraction.binary_name = 'test.tgz'
+    @extraction.storage_path = "#{ENV['RUBY_HOME']}/test/test.tgz"
     @extraction.id = 'test-gzip'
     @extraction.mime_type = 'application/gzip'
 
@@ -50,7 +50,7 @@ class TestExtraction < Minitest::Test
 
     # verify
     assert_equal(PeekType::LISTING, @extraction.peek_type)
-    exp_peek_text = "<span class='glyphicon glyphicon-folder-open'></span> test.txt.gz<div class='indent'><span class='glyphicon glyphicon-file'></span> testing\n</div>"
+    exp_peek_text = "<span class='glyphicon glyphicon-folder-open'></span> test.tgz<div class='indent'><span class='glyphicon glyphicon-file'></span> test.txt</div>"
     assert_equal(exp_peek_text, @extraction.peek_text)
   end
 
@@ -156,7 +156,23 @@ class TestExtraction < Minitest::Test
     assert_equal(exp_peek_text, @extraction.peek_text)
   end
 
-  def test_extract_gzip
+  def test_extract_gzip_tar
+    # setup
+    @extraction.binary_name = 'test.tgz'
+    @extraction.storage_path = "#{ENV['RUBY_HOME']}/test/test.tgz"
+    @extraction.id = 'test-gzip'
+    @extraction.mime_type = 'application/gzip'
+
+    # test
+    @extraction.extract_gzip
+
+    # verify
+    assert_equal(PeekType::LISTING, @extraction.peek_type)
+    exp_peek_text = "<span class='glyphicon glyphicon-folder-open'></span> test.tgz<div class='indent'><span class='glyphicon glyphicon-file'></span> test.txt</div>"
+    assert_equal(exp_peek_text, @extraction.peek_text)
+  end
+
+  def test_extract_gzip_not_tar
     # setup
     @extraction.binary_name = 'test.txt.gz'
     @extraction.storage_path = "#{ENV['RUBY_HOME']}/test/test.txt.gz"
@@ -168,7 +184,7 @@ class TestExtraction < Minitest::Test
 
     # verify
     assert_equal(PeekType::LISTING, @extraction.peek_type)
-    exp_peek_text = "<span class='glyphicon glyphicon-folder-open'></span> test.txt.gz<div class='indent'><span class='glyphicon glyphicon-file'></span> testing\n</div>"
+    exp_peek_text = "<span class='glyphicon glyphicon-folder-open'></span> test.txt.gz<div class='indent'><span class='glyphicon glyphicon-file'></span> test.txt</div>"
     assert_equal(exp_peek_text, @extraction.peek_text)
   end
 
