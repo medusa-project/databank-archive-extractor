@@ -117,6 +117,9 @@ class Extraction
     begin
       LOGGER.info("Extracting zip file #{@binary_name}")
       entry_paths = []
+      `zip -T #{storage_path}`
+      valid_zip = $?.exitstatus.zero?
+      valid_zip ? LOGGER.info("#{binary_name} is a valid zip file") : LOGGER.error("#{@binary_name} is an invalid zip")
       Zip::File.open(@storage_path) do |zip_file|
         zip_file.each do |entry|
           if entry.name_safe?

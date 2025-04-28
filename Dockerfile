@@ -11,7 +11,8 @@ RUN apt-get update && apt-get install -y \
   git \
   libpq-dev \
   libarchive-dev \
-  libmagic-dev
+  libmagic-dev \
+  zip
 
 
 RUN mkdir extractor
