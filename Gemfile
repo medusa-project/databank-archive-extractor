@@ -28,7 +28,7 @@ gem 'minitest'
 
 gem 'simplecov'
 
-gem 'nokogiri', '>= 1.18.8'
+gem 'nokogiri', '>= 1.18.9'
 
 gem 'ruby-filemagic', '>= 0.7.1'
 
