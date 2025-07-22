@@ -145,7 +145,12 @@ class Extraction
         end
       end
       handle_entry_paths(entry_paths)
-
+    rescue Archive::Error => e
+      LOGGER.error("Archive Error: #{e}")
+      @status = ExtractionStatus::ERROR
+      @peek_type = PeekType::NONE
+      report_problem("problem extracting archive listing for task #{@id}: #{e.message}")
+      return false
     rescue StandardError => ex
       LOGGER.error(ex)
       @status = ExtractionStatus::ERROR
@@ -296,7 +301,7 @@ class Extraction
   end
 
   def ends_in_slash(path)
-    return path[-1] == '/'
+    return path[-1] == '/' || path[-1] =='\\'
   end
 
   def is_ds_store(path)
