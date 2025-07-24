@@ -99,11 +99,12 @@ class Extraction
   end
 
   def mime_from_filename(filename)
-    mime_guesses = MIME::Types.type_for(filename).first.content_type
-    if mime_guesses.length > 0
-      mime_guesses
-    else
+    mime_type = MIME::Types.type_for(filename).first
+    mime_guesses = mime_type.nil? ? nil : mime_type.content_type
+    if mime_guesses.nil? || mime_guesses.empty?
       nil
+    else
+      mime_guesses
     end
   end
 
