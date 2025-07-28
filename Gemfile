@@ -26,6 +26,8 @@ gem "aws-sdk-sqs"
 
 gem 'minitest'
 
+gem 'timeout'
+
 gem 'simplecov'
 
 gem 'nokogiri', '>= 1.18.9'

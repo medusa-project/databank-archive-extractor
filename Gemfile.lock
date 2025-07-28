@@ -51,6 +51,7 @@ GEM
       simplecov_json_formatter (~> 0.1)
     simplecov-html (0.12.3)
     simplecov_json_formatter (0.1.4)
+    timeout (0.4.3)
 
 PLATFORMS
   arm64-darwin-23
@@ -70,6 +71,7 @@ DEPENDENCIES
   ruby-filemagic (>= 0.7.1)
   rubyzip
   simplecov
+  timeout
 
 BUNDLED WITH
    2.3.22
