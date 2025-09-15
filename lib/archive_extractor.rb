@@ -12,13 +12,13 @@ require_relative 'extractor/extraction_status'
 require_relative 'extractor/error_type'
 
 class ArchiveExtractor
-  attr_accessor :s3_client, :s3_resource, :sqs, :bucket_name, :object_key, :binary_name, :web_id, :mime_type, :extraction
+  attr_accessor :s3_client, :s3_transfer_manager, :sqs, :bucket_name, :object_key, :binary_name, :web_id, :mime_type, :extraction
   Config.load_and_set_settings(Config.setting_files("#{ENV['RUBY_HOME']}/config", ENV['RUBY_ENV']))
   STDOUT.sync = true
   LOGGER = Logger.new(STDOUT)
   GIGABYTE = 2**30
 
-  def initialize(bucket_name, object_key, binary_name, web_id, mime_type, sqs, s3_client, s3_resource)
+  def initialize(bucket_name, object_key, binary_name, web_id, mime_type, sqs, s3_client, s3_transfer_manager)
     @bucket_name = bucket_name
     @object_key = object_key
     @binary_name = binary_name
@@ -26,7 +26,7 @@ class ArchiveExtractor
     @mime_type = mime_type
     @sqs = sqs
     @s3_client = s3_client
-    @s3_resource = s3_resource
+    @s3_transfer_manager = s3_transfer_manager
   end
 
   def extract
@@ -90,7 +90,8 @@ class ArchiveExtractor
 
   def get_object(local_path, error)
     begin
-      @s3_resource.bucket(@bucket_name).object(@object_key).download_file(local_path)
+      download_file_resp = @s3_transfer_manager.download_file(local_path, bucket: @bucket_name, key: @object_key)
+      raise StandardError("Download failed for #{@object_key} with ID #{@web_id} from S3 bucket #{@bucket_name}") unless download_file_resp
       LOGGER.info("Getting object #{@object_key} with ID #{@web_id} from #{@bucket_name}")
     rescue StandardError => e
       s3_error = "Error getting object #{@object_key} with ID #{@web_id} from S3 bucket #{@bucket_name}: #{e.message}"

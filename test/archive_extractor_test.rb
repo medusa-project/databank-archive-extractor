@@ -11,8 +11,8 @@ class TestArchiveExtractor < Minitest::Test
     mime_type = 'application/zip'
     @sqs = Minitest::Mock.new
     @s3_client = Minitest::Mock.new
-    @s3_resource = Minitest::Mock.new
-    @archive_extractor = ArchiveExtractor.new(bucket_name, object_key, binary_name, web_id, mime_type, @sqs, @s3_client, @s3_resource)
+    @s3_transfer_manager = Minitest::Mock.new
+    @archive_extractor = ArchiveExtractor.new(bucket_name, object_key, binary_name, web_id, mime_type, @sqs, @s3_client, @s3_transfer_manager)
   end
 
   def test_extract
@@ -32,11 +32,7 @@ class TestArchiveExtractor < Minitest::Test
       FileUtils.mkdir_p(dirname)
     end
     FileUtils.cp(file_path, local_path)
-    mock_bucket = Minitest::Mock.new
-    mock_object = Minitest::Mock.new
-    @s3_resource.expect(:bucket, mock_bucket, [@archive_extractor.bucket_name])
-    mock_bucket.expect(:object, mock_object, [@archive_extractor.object_key])
-    mock_object.expect(:download_file, nil, [local_path])
+    @s3_transfer_manager.expect(:download_file, true, [local_path], bucket: @archive_extractor.bucket_name, key: @archive_extractor.object_key)
 
     peek_text = "<span class='glyphicon glyphicon-folder-open'></span> test.zip<div class='indent'><span class='glyphicon glyphicon-file'></span> test.txt</div>"
     items = [{'item_name' => 'test.txt', 'item_path' => 'test.txt', 'item_size' => 12, 'media_type' => 'text/plain', 'is_directory' => false}]
@@ -53,9 +49,7 @@ class TestArchiveExtractor < Minitest::Test
 
     # verify
     assert_mock(@s3_client)
-    assert_mock(@s3_resource)
-    assert_mock(mock_bucket)
-    assert_mock(mock_object)
+    assert_mock(@s3_transfer_manager)
     assert_mock(@sqs)
   end
 
@@ -148,20 +142,16 @@ class TestArchiveExtractor < Minitest::Test
   end
 
   def test_get_object
+    #TODO: Update to use s3_transfer_manager
     # setup
     local_path = 'test/path'
-    mock_bucket = Minitest::Mock.new
-    mock_object = Minitest::Mock.new
-    @s3_resource.expect(:bucket, mock_bucket, [@archive_extractor.bucket_name])
-    mock_bucket.expect(:object, mock_object, [@archive_extractor.object_key])
-    mock_object.expect(:download_file, nil, [local_path])
+    @s3_transfer_manager.expect(:download_file, true, [local_path], bucket: @archive_extractor.bucket_name, key: @archive_extractor.object_key)
+
     # test
     error = @archive_extractor.get_object(local_path, [])
 
     # verify
-    assert_mock(@s3_resource)
-    assert_mock(mock_bucket)
-    assert_mock(mock_object)
+    assert_mock(@s3_transfer_manager)
     assert_empty(error)
   end
 

@@ -1,3 +1,4 @@
+# frozen_string_literal: true
 require 'json'
 require 'os'
 require 'mime/types'
@@ -232,7 +233,7 @@ class Extraction
         file = nil
         case type
         when ExtractionType::ZIP
-          entry.extract(extracted_entry_path)
+          entry.extract(destination_directory: extracted_entry_dir)
         else
           file = File.open(extracted_entry_path, 'wb')
         end
@@ -322,7 +323,9 @@ class Extraction
   end
 
   def entry_paths_arr_to_html(entry_paths)
-    return_string = '<span class="glyphicon glyphicon-folder-open"></span> '
+    beginning_string = '<span class="glyphicon glyphicon-folder-open"></span> '
+
+    return_string = +beginning_string
 
     return_string << @binary_name
 

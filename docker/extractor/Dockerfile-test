@@ -1,4 +1,4 @@
-FROM --platform=linux/arm64 ruby:3.1.2
+FROM --platform=linux/arm64 ruby:3.4.5
 #FROM ruby:3.1.2
 
 ENV RUBY_ENV=test
