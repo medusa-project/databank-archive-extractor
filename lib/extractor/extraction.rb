@@ -233,7 +233,7 @@ class Extraction
         file = nil
         case type
         when ExtractionType::ZIP
-          entry.extract(destination_directory: extracted_entry_dir)
+          entry.extract(destination_directory: storage_dir)
         else
           file = File.open(extracted_entry_path, 'wb')
         end
