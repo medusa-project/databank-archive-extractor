@@ -32,7 +32,14 @@ class TestArchiveExtractor < Minitest::Test
       FileUtils.mkdir_p(dirname)
     end
     FileUtils.cp(file_path, local_path)
-    @s3_transfer_manager.expect(:download_file, true, [local_path], bucket: @archive_extractor.bucket_name, key: @archive_extractor.object_key)
+    @s3_transfer_manager.expect(:download_file,
+                                true,
+                                [local_path],
+                                bucket: @archive_extractor.bucket_name,
+                                key: @archive_extractor.object_key,
+                                thread_count: 6,
+                                progress_callback: Object
+    )
 
     peek_text = "<span class='glyphicon glyphicon-folder-open'></span> test.zip<div class='indent'><span class='glyphicon glyphicon-file'></span> test.txt</div>"
     items = [{'item_name' => 'test.txt', 'item_path' => 'test.txt', 'item_size' => 12, 'media_type' => 'text/plain', 'is_directory' => false}]
@@ -145,7 +152,14 @@ class TestArchiveExtractor < Minitest::Test
     #TODO: Update to use s3_transfer_manager
     # setup
     local_path = 'test/path'
-    @s3_transfer_manager.expect(:download_file, true, [local_path], bucket: @archive_extractor.bucket_name, key: @archive_extractor.object_key)
+    @s3_transfer_manager.expect(:download_file,
+                                true,
+                                [local_path],
+                                bucket: @archive_extractor.bucket_name,
+                                key: @archive_extractor.object_key,
+                                thread_count: 6,
+                                progress_callback: Object
+    )
 
     # test
     error = @archive_extractor.get_object(local_path, [])

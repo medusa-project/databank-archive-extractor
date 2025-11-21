@@ -90,7 +90,21 @@ class ArchiveExtractor
 
   def get_object(local_path, error)
     begin
-      download_file_resp = @s3_transfer_manager.download_file(local_path, bucket: @bucket_name, key: @object_key)
+      # bytes and part_sizes are each an array with 1 entry per part
+      # part_sizes may not be known until the first bytes are retrieved
+      perc = 0
+      progress = proc do |bytes, part_sizes, file_size|
+        calc_perc = 100.0 * bytes.sum / file_size
+        unless calc_perc.round(0) == perc.round(0)
+          perc = calc_perc
+          LOGGER.info("Total: #{perc.round(2)}%")
+        end
+      end
+      download_file_resp = @s3_transfer_manager.download_file(local_path,
+                                                              bucket: @bucket_name,
+                                                              key: @object_key,
+                                                              thread_count: 6,
+                                                              progress_callback: progress)
       raise StandardError("Download failed for #{@object_key} with ID #{@web_id} from S3 bucket #{@bucket_name}") unless download_file_resp
       LOGGER.info("Getting object #{@object_key} with ID #{@web_id} from #{@bucket_name}")
     rescue StandardError => e
