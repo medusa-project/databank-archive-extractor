@@ -90,6 +90,20 @@ class TestArchiveExtractor < Minitest::Test
     assert_equal(Settings.aws.efs.mount_point, storage_path)
   end
 
+  def test_get_storage_path_key_not_found
+    # setup
+    resp = Aws::S3::Errors::NoSuchKey.new(nil, nil)
+
+    @s3_client.expect(:get_object_attributes,  -> { raise StandardError }, [{ bucket: 'test-bucket', key: 'test-key', object_attributes: ['ObjectSize']}])
+
+    # test
+    storage_path = @archive_extractor.get_storage_path
+
+    # verify
+    assert_mock(@s3_client)
+    assert_equal(@archive_extractor.error.empty?, false)
+  end
+
   def test_file_exists?
     # setup
     storage_path = Settings.aws.efs.mount_point
@@ -162,11 +176,11 @@ class TestArchiveExtractor < Minitest::Test
     )
 
     # test
-    error = @archive_extractor.get_object(local_path, [])
+    @archive_extractor.get_object(local_path)
 
     # verify
     assert_mock(@s3_transfer_manager)
-    assert_empty(error)
+    assert_empty(@archive_extractor.error)
   end
 
   def test_get_object_error
@@ -178,7 +192,7 @@ class TestArchiveExtractor < Minitest::Test
 
     # test and verify
     stub_s3.stub :get_object, raises_exception do
-      error = @archive_extractor.get_object(local_path, [])
+      error = @archive_extractor.get_object(local_path)
       assert(error.first.value?(ErrorType::S3_GET))
     end
   end
@@ -192,7 +206,7 @@ class TestArchiveExtractor < Minitest::Test
     extraction = Extraction.new(binary_name, local_path, web_id, mime_type)
 
     #test
-    return_value = @archive_extractor.perform_extraction(extraction, [])
+    return_value = @archive_extractor.perform_extraction(extraction)
 
     # verify
     assert(return_value.value?(PeekType::LISTING))
@@ -212,7 +226,7 @@ class TestArchiveExtractor < Minitest::Test
 
     # test and verify
     stub_extraction.stub :process, raises_exception do
-      return_value = @archive_extractor.perform_extraction(stub_extraction, [])
+      return_value = @archive_extractor.perform_extraction(stub_extraction)
       assert(return_value.value?(PeekType::NONE))
       assert(return_value.value?(ExtractionStatus::ERROR))
     end

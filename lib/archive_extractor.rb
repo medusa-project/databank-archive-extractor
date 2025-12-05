@@ -12,7 +12,7 @@ require_relative 'extractor/extraction_status'
 require_relative 'extractor/error_type'
 
 class ArchiveExtractor
-  attr_accessor :s3_client, :s3_transfer_manager, :sqs, :bucket_name, :object_key, :binary_name, :web_id, :mime_type, :extraction
+  attr_accessor :s3_client, :s3_transfer_manager, :sqs, :bucket_name, :object_key, :binary_name, :web_id, :mime_type, :extraction, :error
   Config.load_and_set_settings(Config.setting_files("#{ENV['RUBY_HOME']}/config", ENV['RUBY_ENV']))
   STDOUT.sync = true
   LOGGER = Logger.new(STDOUT)
@@ -27,13 +27,14 @@ class ArchiveExtractor
     @sqs = sqs
     @s3_client = s3_client
     @s3_transfer_manager = s3_transfer_manager
+    @error = []
   end
 
   def extract
     begin
-      error = []
       LOGGER.info("Bucket name: #{@bucket_name}, Object key: #{@object_key}, Binary name: #{@binary_name}, Web id: #{@web_id}, Mime type: #{@mime_type}")
       storage_path = get_storage_path
+      send_s3_get_errors_and_exit(false) unless @error.empty?
       LOGGER.info("Storage path: #{storage_path}")
       del_path = "#{storage_path}#{@bucket_name}_#{@web_id}"
       local_path = "#{del_path}/#{@binary_name}"
@@ -47,10 +48,11 @@ class ArchiveExtractor
         exit! unless ENV['RUBY_ENV'] == 'test'
       end
 
-      get_object(local_path, error)
+      get_object(local_path)
+      send_s3_get_errors_and_exit(true) unless @error.empty?
 
       extraction = Extraction.new(@binary_name, local_path, @web_id, @mime_type)
-      extraction_return_value = perform_extraction(extraction, error)
+      extraction_return_value = perform_extraction(extraction)
       s3_path = "messages/#{@web_id}.json"
       s3_put_status, s3_put_error = put_json_response(extraction_return_value, s3_path)
 
@@ -70,14 +72,30 @@ class ArchiveExtractor
   end
 
   def get_storage_path
-    resp = @s3_client.get_object_attributes({
-                                       bucket: @bucket_name,
-                                       key: @object_key,
-                                       object_attributes: ['ObjectSize']
-                                     })
-    object_size = resp.object_size
-    LOGGER.info("#{@web_id} size:  #{object_size}")
-    object_size > 15 * GIGABYTE ? Settings.aws.efs.mount_point : Settings.ephemeral_storage_path
+    storage_path = nil
+    begin
+      resp = @s3_client.get_object_attributes({
+                                         bucket: @bucket_name,
+                                         key: @object_key,
+                                         object_attributes: ['ObjectSize']
+                                       })
+      object_size = resp.object_size
+      LOGGER.info("#{@web_id} size:  #{object_size}")
+      storage_path = object_size > 15 * GIGABYTE ? Settings.aws.efs.mount_point : Settings.ephemeral_storage_path
+    rescue StandardError => e
+      error_msg = "Error getting attributes for #{@object_key} with ID #{@web_id} in bucket #{@bucket_name}: #{e.message}"
+      @error.push({"error_type" => ErrorType::S3_GET, "report" => error_msg})
+      LOGGER.error(error_msg)
+    end
+    storage_path
+  end
+
+  def send_s3_get_errors_and_exit(delete_working_files)
+    s3_get_errors = @error.map {|o| Hash[o.each_pair.to_a]}
+
+    s3_message = {"bucket_name" => @bucket_name, "object_key" => nil, "s3_status" => ExtractionStatus::ERROR, "error" => s3_get_errors}
+    send_sqs_message(s3_message)
+    (delete_working_files ? exit(1) : exit!) unless ENV['RUBY_ENV'] == 'test'
   end
 
   def file_exists?(storage_path, lock_path, local_path)
@@ -88,7 +106,7 @@ class ArchiveExtractor
     lock_file_exists || local_file_exists
   end
 
-  def get_object(local_path, error)
+  def get_object(local_path)
     begin
       # bytes and part_sizes are each an array with 1 entry per part
       # part_sizes may not be known until the first bytes are retrieved
@@ -110,26 +128,25 @@ class ArchiveExtractor
     rescue StandardError => e
       s3_error = "Error getting object #{@object_key} with ID #{@web_id} from S3 bucket #{@bucket_name}: #{e.message}"
       LOGGER.error(s3_error)
-      error.push({"error_type" => ErrorType::S3_GET, "report" => s3_error})
+      @error.push({"error_type" => ErrorType::S3_GET, "report" => s3_error})
     end
-    return error
   end
 
-  def perform_extraction(extraction, error)
+  def perform_extraction(extraction)
     begin
       extraction.process
       status = extraction.status
       LOGGER.info("status: #{status}")
       LOGGER.error("error: #{extraction.error}") if status == ExtractionStatus::ERROR
-      error.concat(extraction.error)
+      @error.concat(extraction.error)
       items = extraction.nested_items.map { |o| Hash[o.each_pair.to_a] }
       errors = error.map {|o| Hash[o.each_pair.to_a]}
       extraction_return_value = {"web_id" => @web_id, "status" => status, "error" => errors, "peek_type" => extraction.peek_type, "peek_text" => extraction.peek_text, "nested_items" => items}
     rescue  StandardError => e
       error_message = {"task_id" => @web_id, "extraction_process_report" => "Error extracting #{@object_key} with ID #{@web_id}: #{e.message}"}
       LOGGER.error(error_message)
-      error.push(error_message)
-      errors = error.map {|o| Hash[o.each_pair.to_a]}
+      @error.push(error_message)
+      errors = @error.map {|o| Hash[o.each_pair.to_a]}
       extraction_return_value = {"web_id" => @web_id, "status" => ExtractionStatus::ERROR, "error" => errors, "peek_type" => PeekType::NONE, "peek_text" => nil, "nested_items" => []}
     end
     return extraction_return_value
