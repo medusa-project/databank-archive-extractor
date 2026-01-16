@@ -32,6 +32,7 @@ class ArchiveExtractor
 
   def extract
     begin
+      total_time_start = Time.now
       LOGGER.info("Bucket name: #{@bucket_name}, Object key: #{@object_key}, Binary name: #{@binary_name}, Web id: #{@web_id}, Mime type: #{@mime_type}")
       storage_path = get_storage_path
       send_s3_get_errors_and_exit(false) unless @error.empty?
@@ -45,7 +46,7 @@ class ArchiveExtractor
       already_exists = file_exists?(storage_path, lock_path, local_path)
       LOGGER.info("File already exists? #{already_exists}")
       if already_exists
-        exit! unless ENV['RUBY_ENV'] == 'test'
+        exit!(0) unless ENV['RUBY_ENV'] == 'test'
       end
 
       get_object(local_path)
@@ -69,6 +70,9 @@ class ArchiveExtractor
       FileUtils.rm(lock_path, verbose: true)
       File.exist?(lock_path) ? LOGGER.error("Unable to remove #{@web_id} lock") : LOGGER.info("Removed #{@web_id} lock")
     end
+    total_time_end = Time.now
+    total_duration = total_time_end - total_time_start
+    LOGGER.info("Total task duration #{total_duration}")
   end
 
   def get_storage_path
