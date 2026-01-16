@@ -26,4 +26,4 @@ RUN gem install bundler && bundle install
 COPY . ./
 
 #RUN rake test
-CMD ["rake", "test"]
+RUN ["rake", "test"]
