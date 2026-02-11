@@ -1,6 +1,8 @@
 source "https://rubygems.org"
 git_source(:github) { |repo| "https://github.com/#{repo}.git" }
 
+gem 'bundler', '~> 4.0'
+
 # Use mime-types to determine mimetypes based on extension
 gem 'mime-types', require: 'mime/types/full'
 
@@ -25,6 +27,10 @@ gem "aws-sdk-s3", '>= 1.208.0'
 gem "aws-sdk-sqs"
 
 gem 'minitest'
+
+gem 'mocha'
+
+gem 'csv'
 
 gem 'simplecov'
 

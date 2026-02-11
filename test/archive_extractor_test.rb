@@ -9,9 +9,9 @@ class TestArchiveExtractor < Minitest::Test
     binary_name = 'test'
     web_id = 'test-id'
     mime_type = 'application/zip'
-    @sqs = Minitest::Mock.new
-    @s3_client = Minitest::Mock.new
-    @s3_transfer_manager = Minitest::Mock.new
+    @sqs = mock()
+    @s3_client = mock()
+    @s3_transfer_manager = mock()
     @archive_extractor = ArchiveExtractor.new(bucket_name, object_key, binary_name, web_id, mime_type, @sqs, @s3_client, @s3_transfer_manager)
   end
 
@@ -21,9 +21,9 @@ class TestArchiveExtractor < Minitest::Test
     @archive_extractor.web_id = 'test-zip'
     @archive_extractor.mime_type = 'application/zip'
     @archive_extractor.object_key = 'test.zip'
-    resp = Minitest::Mock.new
-    resp.expect(:object_size, 23_456_789_123)
-    @s3_client.expect(:get_object_attributes, resp, [{ bucket: 'test-bucket', key: 'test.zip', object_attributes: ['ObjectSize']}])
+    resp = mock()
+    resp.expects(:object_size).returns(23_456_789_123)
+    @s3_client.expects(:get_object_attributes).with({ bucket: 'test-bucket', key: 'test.zip', object_attributes: ['ObjectSize']}).returns(resp)
     del_path = "#{Settings.aws.efs.mount_point}#{@archive_extractor.bucket_name}_#{@archive_extractor.web_id}"
     local_path = "#{del_path}/#{@archive_extractor.object_key}"
     file_path = "#{ENV['RUBY_HOME']}/test/test.zip"
@@ -32,61 +32,49 @@ class TestArchiveExtractor < Minitest::Test
       FileUtils.mkdir_p(dirname)
     end
     FileUtils.cp(file_path, local_path)
-    @s3_transfer_manager.expect(:download_file,
-                                true,
-                                [local_path],
-                                bucket: @archive_extractor.bucket_name,
-                                key: @archive_extractor.object_key,
-                                thread_count: 6,
-                                progress_callback: Object
-    )
+    @s3_transfer_manager.expects(:download_file).with(local_path,
+                                                      bucket: @archive_extractor.bucket_name,
+                                                      key: @archive_extractor.object_key,
+                                                      thread_count: 6,
+                                                      progress_callback: instance_of(Proc)).returns(true)
 
     peek_text = "<span class='glyphicon glyphicon-folder-open'></span> test.zip<div class='indent'><span class='glyphicon glyphicon-file'></span> test.txt</div>"
     items = [{'item_name' => 'test.txt', 'item_path' => 'test.txt', 'item_size' => 12, 'media_type' => 'text/plain', 'is_directory' => false}]
     return_value = {'web_id' => 'test-zip', 'status' => ExtractionStatus::SUCCESS, 'error' => [], 'peek_type' => PeekType::LISTING, 'peek_text' => peek_text, 'nested_items' => items}
     s3_path = 'messages/test-zip.json'
-    @s3_client.expect(:put_object, [], [{ body: return_value.to_json, bucket: Settings.aws.s3.json_bucket, key: s3_path}])
+    @s3_client.expects(:put_object).with({ body: return_value.to_json, bucket: Settings.aws.s3.json_bucket, key: s3_path})
     return_value = {'bucket_name' => 'test-bucket', 'object_key' => s3_path, 's3_status' => ExtractionStatus::SUCCESS, 'error' => []}
-    @sqs.expect(:send_message, nil, [{queue_url: Settings.aws.sqs.queue_url,
+    @sqs.expects(:send_message).with({queue_url: Settings.aws.sqs.queue_url,
                                       message_body: return_value.to_json,
-                                      message_attributes:{}}])
+                                      message_attributes:{}})
 
     # test
     @archive_extractor.extract
-
-    # verify
-    assert_mock(@s3_client)
-    assert_mock(@s3_transfer_manager)
-    assert_mock(@sqs)
   end
 
   def test_get_storage_path_small
     # setup
-    resp = Minitest::Mock.new
-    @s3_client.expect(:get_object_attributes, resp, [{ bucket: 'test-bucket', key: 'test-key', object_attributes: ['ObjectSize']}])
-    resp.expect(:object_size, 12_345)
+    resp = mock()
+    @s3_client.expects(:get_object_attributes).with({ bucket: 'test-bucket', key: 'test-key', object_attributes: ['ObjectSize']}).returns(resp)
+    resp.expects(:object_size).returns(12_345)
 
     # test
     storage_path = @archive_extractor.get_storage_path
 
     # verify
-    assert_mock(@s3_client)
-    assert_mock(resp)
     assert_equal(Settings.ephemeral_storage_path, storage_path)
   end
 
   def test_get_storage_path_large
     # setup
-    resp = Minitest::Mock.new
-    @s3_client.expect(:get_object_attributes, resp, [{ bucket: 'test-bucket', key: 'test-key', object_attributes: ['ObjectSize']}])
-    resp.expect(:object_size, 23_456_789_123)
+    resp = mock()
+    @s3_client.expects(:get_object_attributes).with({ bucket: 'test-bucket', key: 'test-key', object_attributes: ['ObjectSize']}).returns(resp)
+    resp.expects(:object_size).returns(23_456_789_123)
 
     # test
     storage_path = @archive_extractor.get_storage_path
 
     # verify
-    assert_mock(@s3_client)
-    assert_mock(resp)
     assert_equal(Settings.aws.efs.mount_point, storage_path)
   end
 
@@ -94,13 +82,12 @@ class TestArchiveExtractor < Minitest::Test
     # setup
     resp = Aws::S3::Errors::NoSuchKey.new(nil, nil)
 
-    @s3_client.expect(:get_object_attributes,  -> { raise StandardError }, [{ bucket: 'test-bucket', key: 'test-key', object_attributes: ['ObjectSize']}])
+    @s3_client.stubs(:get_object_attributes).with({ bucket: 'test-bucket', key: 'test-key', object_attributes: ['ObjectSize']}).raises(StandardError)
 
     # test
     storage_path = @archive_extractor.get_storage_path
 
     # verify
-    assert_mock(@s3_client)
     assert_equal(@archive_extractor.error.empty?, false)
   end
 
@@ -166,35 +153,35 @@ class TestArchiveExtractor < Minitest::Test
     #TODO: Update to use s3_transfer_manager
     # setup
     local_path = 'test/path'
-    @s3_transfer_manager.expect(:download_file,
-                                true,
-                                [local_path],
+    @s3_transfer_manager.expects(:download_file).with(
+                                local_path,
                                 bucket: @archive_extractor.bucket_name,
                                 key: @archive_extractor.object_key,
                                 thread_count: 6,
-                                progress_callback: Object
-    )
+                                progress_callback: instance_of(Proc)).returns(true)
 
     # test
     @archive_extractor.get_object(local_path)
 
     # verify
-    assert_mock(@s3_transfer_manager)
     assert_empty(@archive_extractor.error)
   end
 
   def test_get_object_error
     # setup
-    stub_s3 = Aws::S3::Client.new(region: Settings.aws.region)
-    @archive_extractor.s3_client = stub_s3
     local_path = "test/path"
-    raises_exception = -> { raise StandardError.new }
+    @s3_transfer_manager.stubs(:download_file).with(
+                                local_path,
+                                bucket: @archive_extractor.bucket_name,
+                                key: @archive_extractor.object_key,
+                                thread_count: 6,
+                                progress_callback: instance_of(Proc)).raises(StandardError)
 
     # test and verify
-    stub_s3.stub :get_object, raises_exception do
-      error = @archive_extractor.get_object(local_path)
-      assert(error.first.value?(ErrorType::S3_GET))
-    end
+    error = @archive_extractor.get_object(local_path)
+
+    #verify
+    assert(error.first.value?(ErrorType::S3_GET))
   end
 
   def test_perform_extraction
@@ -217,46 +204,36 @@ class TestArchiveExtractor < Minitest::Test
 
   def test_perform_extraction_error
     # setup
-    binary_name = 'test.zip'
-    web_id = 'test-zip'
-    mime_type = 'application/zip'
-    local_path = "#{ENV['RUBY_HOME']}/test/test.zip"
-    stub_extraction = Extraction.new(binary_name, local_path, web_id, mime_type)
-    raises_exception = -> { raise StandardError.new }
-
-    # test and verify
-    stub_extraction.stub :process, raises_exception do
-      return_value = @archive_extractor.perform_extraction(stub_extraction)
-      assert(return_value.value?(PeekType::NONE))
-      assert(return_value.value?(ExtractionStatus::ERROR))
-    end
+    mock_extraction = mock()
+    mock_extraction.stubs(:process).raises(StandardError)
+    # test
+    return_value = @archive_extractor.perform_extraction(mock_extraction)
+    # verify
+    assert(return_value.value?(PeekType::NONE))
+    assert(return_value.value?(ExtractionStatus::ERROR))
   end
 
   def test_send_sqs_message
     # setup
     return_value = {'test' => 'retVal'}
-    @sqs.expect(:send_message, nil, [{queue_url: Settings.aws.sqs.queue_url,
+    @sqs.expects(:send_message).with({queue_url: Settings.aws.sqs.queue_url,
                                                       message_body: return_value.to_json,
-                                                      message_attributes:{}}])
+                                                      message_attributes:{}})
 
     # test
     @archive_extractor.send_sqs_message(return_value)
-
-    # verify
-    assert_mock(@sqs)
   end
 
   def test_put_json_response
     # setup
     return_value = {'test' => 'retVal'}
     s3_path = 'test/s3/key'
-    @s3_client.expect(:put_object, nil, [{ body: return_value.to_json, bucket: Settings.aws.s3.json_bucket, key: s3_path}])
+    @s3_client.expects(:put_object).with({ body: return_value.to_json, bucket: Settings.aws.s3.json_bucket, key: s3_path})
 
     # test
     s3_put_status, s3_put_error = @archive_extractor.put_json_response(return_value, s3_path)
 
     # verify
-    assert_mock(@s3_client)
     assert_equal(ExtractionStatus::SUCCESS, s3_put_status)
     assert_empty(s3_put_error)
   end
@@ -265,16 +242,17 @@ class TestArchiveExtractor < Minitest::Test
     # setup
     return_value = {'test' => 'error'}
     s3_path = 'test/s3/error'
-    stub_s3 = Aws::S3::Client.new(region: Settings.aws.region)
-    @archive_extractor.s3_client = stub_s3
-    raises_exception = -> { raise StandardError.new }
+    @s3_client.stubs(:put_object).with({body: return_value.to_json,
+                                        bucket: Settings.aws.s3.json_bucket,
+                                        key: s3_path}).raises(StandardError)
 
-    # test and verify
-    stub_s3.stub :put_object, raises_exception do
-      s3_put_status, s3_put_error = @archive_extractor.put_json_response(return_value, s3_path)
-      assert_equal(ExtractionStatus::ERROR, s3_put_status)
-      assert(!s3_put_error.empty?)
-    end
+
+    # test
+    s3_put_status, s3_put_error = @archive_extractor.put_json_response(return_value, s3_path)
+
+    # verify
+    assert_equal(ExtractionStatus::ERROR, s3_put_status)
+    assert(s3_put_error.any?)
   end
 end
 

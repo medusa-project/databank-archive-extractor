@@ -190,17 +190,16 @@ class TestExtraction < Minitest::Test
 
   def test_extract_entry
     # setup
-    mock_entry = Minitest::Mock.new
+    mock_entry = mock()
     entry_name = "#{ENV['RUBY_HOME']}/bin/set-test-vars.rb"
     type = ExtractionType::GZIP
-    mock_entry.expect(:directory?, false)
-    mock_entry.expect(:size, 123)
+    mock_entry.expects(:directory?).returns(false)
+    mock_entry.expects(:size).returns(123)
 
     # test
     entry_paths = @extraction.extract_entry(mock_entry, entry_name, [], type)
 
     # verify
-    assert_mock(mock_entry)
     assert(entry_paths.include?(entry_name))
     expect_item = {'item_name' => 'set-test-vars.rb', 'item_path' => entry_name, 'item_size' => 123,
                    'media_type' => 'application/x-ruby', 'is_directory' => false}
