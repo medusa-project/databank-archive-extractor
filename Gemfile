@@ -34,7 +34,7 @@ gem 'csv'
 
 gem 'simplecov'
 
-gem 'nokogiri', '>= 1.18.9'
+gem 'nokogiri', '>= 1.19.3'
 
 gem 'ruby-filemagic', '>= 0.7.1'
 
