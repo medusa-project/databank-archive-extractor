@@ -5,7 +5,7 @@ class TestExtraction < Minitest::Test
   Config.load_and_set_settings(Config.setting_files("#{ENV['RUBY_HOME']}/config", 'test'))
   def setup
     binary_name = 'test-binary'
-    web_id = 'test-id'
+    web_id = 'test-id-123'
     storage_path = "#{Settings.aws.efs.mount_point}test-bucket_#{web_id}/test-key"
     mime_type = 'application/zip'
     @extraction = Extraction.new(binary_name, storage_path, web_id, mime_type)
@@ -42,7 +42,7 @@ class TestExtraction < Minitest::Test
     # setup
     @extraction.binary_name = 'test.tgz'
     @extraction.storage_path = "#{ENV['RUBY_HOME']}/test/test.tgz"
-    @extraction.id = 'test-gzip'
+    @extraction.id = 'test-features-gzip'
     @extraction.mime_type = 'application/gzip'
 
     # test
@@ -58,7 +58,7 @@ class TestExtraction < Minitest::Test
     # setup
     @extraction.binary_name = 'test.zip'
     @extraction.storage_path = "#{ENV['RUBY_HOME']}/test/test.zip"
-    @extraction.id = 'test-zip'
+    @extraction.id = 'test-festures-zip'
     @extraction.mime_type = 'application/zip'
 
     # test
@@ -74,7 +74,7 @@ class TestExtraction < Minitest::Test
     # setup
     @extraction.binary_name = 'test'
     @extraction.storage_path = "#{ENV['RUBY_HOME']}/test"
-    @extraction.id = 'test-default'
+    @extraction.id = 'test-features-default'
     @extraction.mime_type = 'application/directory'
 
     # test
@@ -126,8 +126,8 @@ class TestExtraction < Minitest::Test
   def test_extract_zip
     # setup
     @extraction.binary_name = 'test.zip'
-    @extraction.storage_path = "#{ENV['RUBY_HOME']}/test/test.zip"
-    @extraction.id = 'test-zip'
+    @extraction.storage_path = "#{ENV['RUBY_HOME']}/test/tmp/extractor/test.zip"
+    @extraction.id = 'test-extract-zip'
     @extraction.mime_type = 'application/zip'
 
     # test
@@ -137,6 +137,41 @@ class TestExtraction < Minitest::Test
     assert_equal(PeekType::LISTING, @extraction.peek_type)
     exp_peek_text = "<span class='glyphicon glyphicon-folder-open'></span> test.zip<div class='indent'><span class='glyphicon glyphicon-file'></span> test.txt</div>"
     assert_equal(exp_peek_text, @extraction.peek_text)
+  end
+
+  def test_extract_zip_too_big
+    # setup
+    @extraction.binary_name = 'test.zip'
+    ephemeral_storage_path = "#{ENV['RUBY_HOME']}/test/tmp/extractor/test.zip"
+    efs_storage_path = ephemeral_storage_path.gsub(Settings.ephemeral_storage_path, Settings.aws.efs.mount_point)
+    @extraction.storage_path = ephemeral_storage_path
+    @extraction.id = 'test-extract-big-zip'
+    @extraction.mime_type = 'application/zip'
+    Zip::File.stubs(:open).raises(StandardError.new("No space left on device @ testing_write")).with(ephemeral_storage_path)
+    Zip::File.stubs(:open).returns(Zip::File.open(ephemeral_storage_path)).times(2).with(efs_storage_path)
+    # test
+    big_zip_success = @extraction.extract_zip
+    
+
+    # verify
+    assert_equal(true, @extraction.archive_retry)
+    exp_peek_text = "<span class='glyphicon glyphicon-folder-open'></span> test.zip<div class='indent'><span class='glyphicon glyphicon-file'></span> test.txt</div>"
+    assert_equal(true, big_zip_success)
+  end
+
+    def test_extract_zip_too_big_fail
+    # setup
+    @extraction.binary_name = 'test.zip'
+    ephemeral_storage_path = "#{ENV['RUBY_HOME']}/test/tmp/extractor/test.zip"
+    efs_storage_path = ephemeral_storage_path.gsub(Settings.ephemeral_storage_path, Settings.aws.efs.mount_point)
+    @extraction.storage_path = ephemeral_storage_path
+    @extraction.id = 'test-extract-big-zip-fail'
+    @extraction.mime_type = 'application/zip'
+    Zip::File.stubs(:open).with(ephemeral_storage_path).raises(StandardError.new("No space left on device @ testing_write"))
+    Zip::File.stubs(:open).with(efs_storage_path).raises(StandardError.new("Some Other Error"))
+
+    # test
+    big_zip_success = @extraction.extract_zip
   end
 
   def test_extract_archive
@@ -160,7 +195,7 @@ class TestExtraction < Minitest::Test
     # setup
     @extraction.binary_name = 'test.tgz'
     @extraction.storage_path = "#{ENV['RUBY_HOME']}/test/test.tgz"
-    @extraction.id = 'test-gzip'
+    @extraction.id = 'test-extract-gzip'
     @extraction.mime_type = 'application/gzip'
 
     # test
@@ -205,6 +240,9 @@ class TestExtraction < Minitest::Test
                    'media_type' => 'application/x-ruby', 'is_directory' => false}
     assert(@extraction.nested_items.include?(expect_item))
 
+    # clean up
+    storage_dir = File.dirname(@extraction.storage_path)
+    FileUtils.rm_rf(storage_dir, verbose: true)
   end
 
   def test_handle_entry_paths

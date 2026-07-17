@@ -38,3 +38,5 @@ gem 'nokogiri', '>= 1.19.3'
 
 gem 'ruby-filemagic', '>= 0.7.1'
 
+gem 'byebug', '>= 11.1.3'
+

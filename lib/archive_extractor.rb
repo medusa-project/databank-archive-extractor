@@ -85,7 +85,7 @@ class ArchiveExtractor
                                        })
       object_size = resp.object_size
       LOGGER.info("#{@web_id} size:  #{object_size}")
-      storage_path = object_size > 15 * GIGABYTE ? Settings.aws.efs.mount_point : Settings.ephemeral_storage_path
+      storage_path = object_size > 18 * GIGABYTE ? Settings.aws.efs.mount_point : Settings.ephemeral_storage_path
     rescue StandardError => e
       error_msg = "Error getting attributes for #{@object_key} with ID #{@web_id} in bucket #{@bucket_name}: #{e.message}"
       @error.push({"error_type" => ErrorType::S3_GET, "report" => error_msg})

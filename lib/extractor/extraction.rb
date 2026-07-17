@@ -20,7 +20,7 @@ require_relative 'mime_type'
 
 class Extraction
 
-  attr_accessor :binary_name, :storage_path, :status, :peek_type, :peek_text, :id, :nested_items, :error, :mime_type
+  attr_accessor :binary_name, :storage_path, :status, :peek_type, :peek_text, :id, :nested_items, :error, :mime_type, :archive_retry
   ALLOWED_CHAR_NUM = 1024 * 8
   ALLOWED_DISPLAY_BYTES = ALLOWED_CHAR_NUM * 8
   STDOUT.sync = true
@@ -32,6 +32,7 @@ class Extraction
     @mime_type = mime_type
     @nested_items = []
     @error = []
+    @archive_retry = false
   end
 
   def process
@@ -129,12 +130,43 @@ class Extraction
       handle_entry_paths(entry_paths)
       return true
     rescue StandardError => ex
+      error_message = ex.message
+      storage_error = error_message.include?("No space left on device")
+      if storage_error && !@archive_retry
+        LOGGER.error("Storage error detected, retrying extraction: #{error_message}")
+        storage_error_retry(ExtractionType::ZIP)
+      else
+        @status = ExtractionStatus::ERROR
+        @peek_type = PeekType::NONE
+        report_problem("problem extracting zip listing for task: #{ex.message}")
+        raise ex
+      end
+    end
+  end
+
+  def storage_error_retry(archive_type)
+    begin
+      efs_storage_path = @storage_path.gsub(Settings.ephemeral_storage_path, Settings.aws.efs.mount_point)
+      dirname = File.dirname(efs_storage_path)
+      FileUtils.mkdir_p(dirname) unless File.directory?(dirname)
+      #copy file to efs storage path
+      FileUtils.cp(@storage_path, efs_storage_path)
+      @storage_path = efs_storage_path
+      if archive_type == ExtractionType::ZIP
+        @archive_retry = true
+        extract_zip
+      end
+    rescue StandardError => ex
       @status = ExtractionStatus::ERROR
       @peek_type = PeekType::NONE
-      report_problem("problem extracting zip listing for task: #{ex.message}")
-      #return false
-      raise ex
+      report_problem("problem extracting #{archive_type} listing for task: #{ex.message}")
+    ensure
+      if File.exist?(@storage_path)
+        FileUtils.rm_rf(dirname, verbose: true) unless ENV['RUBY_ENV'] == 'test'
+        File.directory?(dirname) ? LOGGER.error("EFS Retry: Unable to remove #{dirname}") : LOGGER.info("EFS Retry: Removed #{dirname}") unless ENV['RUBY_ENV'] == 'test'
+      end
     end
+
   end
 
   def extract_archive
