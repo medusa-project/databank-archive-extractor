@@ -32,6 +32,8 @@ gem 'mocha'
 
 gem 'csv'
 
+gem 'open3'
+
 gem 'simplecov'
 
 gem 'nokogiri', '>= 1.19.3'

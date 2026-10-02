@@ -11,7 +11,8 @@ RUN apt-get update && apt-get install -y \
   git \
   libpq-dev \
   libarchive-dev \
-libmagic-dev
+  libmagic-dev \
+  p7zip-full
 
 # Copy the Gemfile as well as the Gemfile.lock and install gems.
 # This is a separate step so the dependencies will be cached.

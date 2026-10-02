@@ -174,6 +174,56 @@ class TestExtraction < Minitest::Test
     big_zip_success = @extraction.extract_zip
   end
 
+  def test_extract_archive_cli
+    # setup
+    @extraction.binary_name = 'test.zip'
+    @extraction.storage_path = "#{ENV['RUBY_HOME']}/test/tmp/extractor/test.zip"
+    @extraction.id = 'test-extract-zip'
+    @extraction.mime_type = 'application/zip'
+
+    # test
+    @extraction.extract_archive_cli
+
+    # verify
+    assert_equal(PeekType::LISTING, @extraction.peek_type)
+    exp_peek_text = "<span class='glyphicon glyphicon-folder-open'></span> test.zip<div class='indent'><span class='glyphicon glyphicon-file'></span> test.txt</div>"
+    assert_equal(exp_peek_text, @extraction.peek_text)
+  end
+
+  def test_parse_cli_listing
+    # setup
+    listing = <<~LISTING
+      Path = test.zip
+      Size = 123
+
+      Path = test = .rar
+      Size = 456
+    LISTING
+
+    # test
+    entries = @extraction.parse_cli_listing(listing)
+
+    # verify
+    assert_equal(2, entries.size)
+    assert_equal('test.zip', entries[0]['Path'])
+    assert_equal('123', entries[0]['Size'])
+    assert_equal('test = .rar', entries[1]['Path'])
+    assert_equal('456', entries[1]['Size'])
+  end
+
+  def test_extract_cli_entry
+    # setup
+    entry_name = "#{ENV['RUBY_HOME']}/bin/set-test-vars.rb"
+    entry_size = 123
+    entry_paths = []
+
+    # test
+    result_paths = @extraction.extract_cli_entry(entry_name, entry_size, entry_paths)
+
+    # verify
+    assert(result_paths.include?(entry_name))
+  end
+
   def test_extract_archive
     # setup
     @extraction.binary_name = 'test.tar'

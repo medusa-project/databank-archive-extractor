@@ -12,7 +12,8 @@ RUN apt-get update && apt-get install -y \
   libpq-dev \
   libarchive-dev \
   libmagic-dev \
-  zip
+  zip \
+  p7zip-full
 
 
 RUN mkdir extractor

@@ -11,6 +11,7 @@ require 'rubygems/package'
 require 'config'
 require 'logger'
 require 'ruby-filemagic'
+require 'open3'
 
 require_relative 'extraction_status'
 require_relative 'extraction_type'
@@ -132,9 +133,13 @@ class Extraction
     rescue StandardError => ex
       error_message = ex.message
       storage_error = error_message.include?("No space left on device")
+      deflate64_error = error_message.include?("Deflate64")
       if storage_error && !@archive_retry
         LOGGER.error("Storage error detected, retrying extraction: #{error_message}")
         storage_error_retry(ExtractionType::ZIP)
+      elsif deflate64_error
+        LOGGER.error("Deflate64 error detected, attempting to extract as archive")
+        extract_archive_cli
       else
         @status = ExtractionStatus::ERROR
         @peek_type = PeekType::NONE
@@ -166,7 +171,96 @@ class Extraction
         File.directory?(dirname) ? LOGGER.error("EFS Retry: Unable to remove #{dirname}") : LOGGER.info("EFS Retry: Removed #{dirname}") unless ENV['RUBY_ENV'] == 'test'
       end
     end
+  end
 
+  def extract_archive_cli
+    begin
+        LOGGER.info("Extracting file with 7z CLI #{@binary_name}")
+        entry_paths = []
+        cmd = [
+            '7z', 'l',
+            '-slt',      # Show technical info as key = value pairs
+            '-ba',       # Bare output (suppress banner & header/footer text)
+            @storage_path
+        ]
+
+        stdout, stderr, status = Open3.capture3(*cmd)
+
+        unless status.success?
+            LOGGER.error("7z extraction failed: #{stderr.strip}")
+            @status = ExtractionStatus::ERROR
+            @peek_type = PeekType::NONE
+            report_problem("problem extracting archive with CLI for task: #{stderr.strip}")
+            raise "CLI execution failed (exit code #{status.exitstatus}): #{stderr.strip}"
+        end
+        entries = parse_cli_listing(stdout)
+
+        entries.each do |entry|
+            entry_name = entry['Path']
+            entry_size = entry['Size'].to_i
+            entry_paths = extract_cli_entry(entry_name, entry_size, entry_paths)
+        end
+
+        handle_entry_paths(entry_paths)
+        return true
+    rescue StandardError => ex
+        @status = ExtractionStatus::ERROR
+        @peek_type = PeekType::NONE
+        report_problem("problem extracting archive with CLI for task: #{ex.message}")
+        raise ex
+    end
+  end
+
+  def parse_cli_listing(listing)
+    entries = []
+    current_entry = {}
+
+    listing.each_line do |raw_line|
+        line = raw_line.strip
+
+        if line.empty?
+        # Blank line marks the boundary between file entries
+        unless current_entry.empty?
+            entries << current_entry
+            current_entry = {}
+        end
+        else
+        # Key-value pairs are separated by ' = '
+        key, value = line.split(' = ', 2)
+        if key
+            current_entry[key.strip] = value ? value.strip : ''
+        end
+        end
+    end
+
+    # Capture any remaining entry if listing didn't end with a trailing newline block
+    entries << current_entry unless current_entry.empty?
+
+    entries
+  end
+
+  def extract_cli_entry(entry_name, entry_size, entry_paths)
+    entry_path = valid_entry_path(entry_name)
+    if entry_path && !is_ds_store(entry_path) && !is_mac_thing(entry_path) && !is_mac_tar_thing(entry_path)
+      entry_paths << entry_path
+      if is_directory(entry_name)
+          create_item(entry_path,
+                      name_part(entry_path),
+                      entry_size,
+                      'directory',
+                      true)
+      else
+          mime_guess = mime_from_filename(entry_name) ||
+          'application/octet-stream'
+
+          create_item(entry_path,
+                      name_part(entry_path),
+                      entry_size,
+                      mime_guess,
+                      false)
+      end
+    end
+    entry_paths
   end
 
   def extract_archive
