@@ -328,11 +328,17 @@ class Extraction
       handle_entry_paths(entry_paths)
 
     rescue StandardError => ex
-      @status = ExtractionStatus::ERROR
-      @peek_type = PeekType::NONE
-
-      report_problem("problem extracting gzip listing for task #{@id}: #{ex.message}")
-      return false
+      error_message = ex.message
+      octal_string_error = error_message.include?("is not an octal string")
+      if octal_string_error
+        LOGGER.error("Encountered octal string error while extracting gzip file #{@binary_name}, attempting CLI extraction")
+        extract_archive_cli
+      else
+        @status = ExtractionStatus::ERROR
+        @peek_type = PeekType::NONE
+        report_problem("problem extracting gzip listing for task #{@id}: #{ex.message}")
+        return false
+      end
     end
   ensure
     gzip_extract.close
