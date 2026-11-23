@@ -19,8 +19,7 @@ RUN apt-get update && apt-get install -y \
 RUN mkdir extractor
 WORKDIR extractor
 
-#COPY Gemfile Gemfile.lock  ./
-COPY Gemfile ./
+COPY Gemfile Gemfile.lock  ./
 RUN gem install bundler && bundle install
 
 # Copy the main application, except whatever is listed in .dockerignore.

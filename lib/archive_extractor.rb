@@ -39,7 +39,7 @@ class ArchiveExtractor
       LOGGER.info("Storage path: #{storage_path}")
       del_path = "#{storage_path}#{@bucket_name}_#{@web_id}"
       local_path = "#{del_path}/#{@binary_name}"
-      lock_path = "#{storage_path}#{@web_id}.lock"
+      lock_path = "#{Settings.aws.efs.mount_point}#{@web_id}.lock"
 
       dirname = File.dirname(local_path)
       FileUtils.mkdir_p(dirname) unless File.directory?(dirname)
@@ -104,7 +104,6 @@ class ArchiveExtractor
 
   def file_exists?(storage_path, lock_path, local_path)
     lock_file_exists = File.exist?(lock_path)
-    FileUtils.mkdir_p(storage_path) unless File.directory?(storage_path)
     File.new(lock_path, 'w+') unless lock_file_exists
     local_file_exists = File.exist?(local_path)
     lock_file_exists || local_file_exists

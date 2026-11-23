@@ -159,7 +159,7 @@ class TestExtraction < Minitest::Test
     assert_equal(true, big_zip_success)
   end
 
-    def test_extract_zip_too_big_fail
+  def test_extract_zip_too_big_fail
     # setup
     @extraction.binary_name = 'test.zip'
     ephemeral_storage_path = "#{ENV['RUBY_HOME']}/test/tmp/extractor/test.zip"

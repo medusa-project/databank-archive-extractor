@@ -1,10 +1,4 @@
-on:
-  push:
-    branches:
-    - main
-    - stable
-    - 'bug**'
-    - 'feature**'
+on: [push, pull_request]
 jobs:
   build:
     runs-on: ubuntu-latest
